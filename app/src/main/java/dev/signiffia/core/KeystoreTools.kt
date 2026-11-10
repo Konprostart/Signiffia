@@ -122,6 +122,7 @@ object KeystoreTools {
         if (!file.exists()) throw KeystoreException("Keystore fajl ne postoji.")
         val candidateType = if (type == TYPE_JKS) TYPE_JKS else TYPE_PKCS12
         var last: Throwable? = null
+        var first: Throwable? = null
         // Try the platform provider first, then BouncyCastle (more tolerant of odd files).
         for (provider in listOf(null, BC)) {
             try {
@@ -133,6 +134,7 @@ object KeystoreTools {
                 FileInputStream(file).use { ks.load(it, password) }
                 return ks
             } catch (t: Throwable) {
+                if (first == null) first = t
                 last = t
                 if (isWrongPassword(t) || t is IOException && t.message?.contains("mac", true) == true) {
                     // Wrong password is provider independent - no point retrying.
@@ -140,7 +142,8 @@ object KeystoreTools {
                 }
             }
         }
-        throw KeystoreException(describeLoadFailure(last, candidateType), last)
+        val error = last ?: first
+        throw KeystoreException(describeLoadFailure(error, candidateType), error)
     }
 
     fun isWrongPassword(t: Throwable?): Boolean {
@@ -352,8 +355,10 @@ object KeystoreTools {
             "EC", "ECDSA" -> "SHA256withECDSA"
             else -> throw KeystoreException("Nepodržan algoritam ključa: ${keyPair.private.algorithm}")
         }
-        val signer = JcaContentSignerBuilder(signatureAlgorithm).setProvider(BC).build(keyPair.private)
-        return JcaX509CertificateConverter().setProvider(BC).getCertificate(builder.build(signer))
+        // Use the platform's default JCA providers here: on Android that is Conscrypt, so
+        // certificate generation does not depend on which BouncyCastle build is installed.
+        val signer = JcaContentSignerBuilder(signatureAlgorithm).build(keyPair.private)
+        return JcaX509CertificateConverter().getCertificate(builder.build(signer))
     }
 
     private fun buildDistinguishedName(spec: KeyGenSpec): String {

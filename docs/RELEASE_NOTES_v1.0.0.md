@@ -35,8 +35,8 @@ Aplikacija **nema nijednu dozvolu** — ni INTERNET.
 ## Provera integriteta
 
 ```
-SHA-256: 71faa4ad57202fd5d429ec706419d1f254885aeaf7fe4559df31c1b78b65e505
-Size:    9666407 bytes
+SHA-256: 4cc80426520dc4773feda8560784655d7fe6c292bb731276b528bcaf5812f4d9
+Size:    9666701 bytes
 Signer:  CN=Signiffia, O=Signiffia Open Source, C=RS
 Cert SHA-256: C5:23:49:29:BD:38:82:F0:46:98:37:EE:9D:18:E5:8B:C7:19:25:6E:9A:D0:F6:8A:77:F3:44:68:5B:F3:79:1F
 ```

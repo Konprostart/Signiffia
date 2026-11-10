@@ -396,7 +396,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun loadSignInput(uri: Uri) {
         viewModelScope.launch {
             _busy.value = BusyState("Učitavam fajl…")
-            _signState.update { it.copy(result = null, error = null) }
+            _signState.update { it.copy(result = null, splitResult = null, error = null) }
             try {
                 val summary = withContext(Dispatchers.IO) {
                     val local = copyToWork(uri, "input")
@@ -481,7 +481,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 _signState.update {
-                    it.copy(result = result, error = null, pendingIdsigName = result.takeIf { r -> r.idsigAvailable }?.let { "idsig" })
+                    it.copy(
+                        result = result,
+                        splitResult = null,
+                        error = null,
+                        pendingIdsigName = result.takeIf { r -> r.idsigAvailable }?.let { "idsig" },
+                    )
                 }
                 _message.value = UiMessage("Potpisivanje je uspelo i potpis je proveren.")
             } catch (t: Throwable) {
@@ -532,7 +537,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         durationMs = System.currentTimeMillis() - started,
                     ) to digest
                 }
-                _signState.update { it.copy(splitResult = result, error = null) }
+                _signState.update { it.copy(splitResult = result, result = null, error = null) }
                 _message.value = UiMessage("Svi delovi su potpisani i provereni.")
             } catch (t: Throwable) {
                 if (t is VaultLockedException) {

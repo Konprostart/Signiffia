@@ -405,7 +405,15 @@ object JksSupport {
 
     fun isJks(file: java.io.File): Boolean {
         if (!file.exists() || file.length() < 4) return false
-        val header = file.inputStream().use { it.readNBytes(4) }
+        val header = ByteArray(4)
+        java.io.FileInputStream(file).use { input ->
+            var read = 0
+            while (read < 4) {
+                val count = input.read(header, read, 4 - read)
+                if (count <= 0) return false
+                read += count
+            }
+        }
         val magic = ((header[0].toLong() and 0xFF) shl 24) or
             ((header[1].toLong() and 0xFF) shl 16) or
             ((header[2].toLong() and 0xFF) shl 8) or
