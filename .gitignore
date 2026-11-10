@@ -1,0 +1,20 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof
+.DS_Store
+
+# Signing material must never be committed.
+signing/*.jks
+signing/*.p12
+signing/*.keystore
+signing/*.idsig
+*.idsig
+.kotlin/
+signing/release-credentials.txt
+dist/

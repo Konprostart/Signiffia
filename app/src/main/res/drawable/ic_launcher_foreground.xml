@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Shield -->
+    <path
+        android:fillColor="#FF7FD1C8"
+        android:pathData="M54,24 L78,32 L78,52 C78,67 68,78 54,84 C40,78 30,67 30,52 L30,32 Z" />
+    <!-- Key hole / signature mark -->
+    <path
+        android:fillColor="#FF0F3D3E"
+        android:pathData="M54,40 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0" />
+    <path
+        android:fillColor="#FF0F3D3E"
+        android:pathData="M51.5,44 L56.5,44 L56.5,64 L51.5,64 Z" />
+</vector>

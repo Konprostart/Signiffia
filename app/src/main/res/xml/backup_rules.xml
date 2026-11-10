@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Signiffia keeps its encrypted vault in app-private storage. Exclude it from
+     Android auto-backup; use the in-app encrypted backup instead. -->
+<full-backup-content>
+    <exclude domain="file" path="." />
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="database" path="." />
+</full-backup-content>
