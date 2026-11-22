@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +45,7 @@ fun HomeScreen(
     onCompare: () -> Unit,
     onKeys: () -> Unit,
     onBackup: () -> Unit,
+    onSecurity: () -> Unit,
     onAbout: () -> Unit,
 ) {
     Column(
@@ -96,6 +98,13 @@ fun HomeScreen(
             title = "Backup i vraćanje",
             description = "Šifrovana kopija ključeva koju možeš da preneseš na drugi uređaj.",
             onClick = onBackup,
+        )
+        Spacer(Modifier.height(10.dp))
+        ActionCard(
+            icon = Icons.Filled.Settings,
+            title = "Zaključavanje",
+            description = "PIN, otisak prsta ili lice pri otvaranju aplikacije.",
+            onClick = onSecurity,
         )
         Spacer(Modifier.height(10.dp))
         ActionCard(

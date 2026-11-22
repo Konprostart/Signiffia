@@ -47,11 +47,13 @@ import dev.signiffia.ui.components.InfoRow
 import dev.signiffia.ui.components.SectionCard
 import dev.signiffia.ui.components.StatusBadge
 import dev.signiffia.ui.components.WarningNote
+import dev.signiffia.ui.lock.AppLockGate
 
 @Composable
 fun VerifyScreen(vm: AppViewModel) {
     val state by vm.verifyState.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         uri?.let(vm::verifyInput)
     }
 
@@ -65,7 +67,7 @@ fun VerifyScreen(vm: AppViewModel) {
             title = "Fajl za proveru",
             subtitle = "Podržani su APK i AAB. Proverava se stvarni potpis, ne samo ime fajla.",
         ) {
-            Button(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { AppLockGate.enter(); picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Izaberi APK ili AAB")
             }
         }

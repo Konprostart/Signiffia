@@ -38,7 +38,7 @@ fun AboutScreen() {
                 Spacer(Modifier.padding(3.dp))
                 StatusBadge("offline", BadgeTone.Success)
                 Spacer(Modifier.padding(3.dp))
-                StatusBadge("bez dozvola", BadgeTone.Success)
+                StatusBadge("bez opasnih dozvola", BadgeTone.Success)
             }
             Spacer(Modifier.height(10.dp))
             Text(
@@ -69,6 +69,18 @@ fun AboutScreen() {
         }
 
         Spacer(Modifier.height(14.dp))
+        SectionCard(title = "Zaključavanje aplikacije") {
+            Text(
+                "Opciono, isključeno po podrazumevanoj vrednosti. Možeš da uključiš PIN / šifru / " +
+                    "šaru uređaja ili biometriju (otisak prsta / lice) sa PIN-om kao rezervom. " +
+                    "Signiffia nikada ne čuva tvoj PIN, šifru ni biometrijske podatke — samo traži " +
+                    "od Android sistema da potvrdi identitet. Biometrijski podaci se obrađuju " +
+                    "isključivo na uređaju. Ovo ne menja šifrovanje ključeva.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
         SectionCard(title = "Potpisne šeme") {
             InfoRow("v1 (JAR)", "Android 6 i stariji, i AAB")
             InfoRow("v2", "Android 7+, provera celog APK-a")
@@ -93,6 +105,7 @@ fun AboutScreen() {
             LicenseRow("Android apksig", "Apache-2.0", "Pokretanje potpisivanja i provere potpisa.")
             LicenseRow("BouncyCastle (bcprov, bcpkix, bcutil)", "Bouncy Castle Licence (MIT stil)", "JKS keystore, generisanje sertifikata.")
             LicenseRow("AndroidX / Jetpack Compose / Material 3", "Apache-2.0", "Korisnički interfejs.")
+            LicenseRow("AndroidX Biometric i Fragment", "Apache-2.0", "Opciono zaključavanje otiskom prsta / licem.")
             LicenseRow("Kotlin i kotlinx.coroutines", "Apache-2.0", "Jezik i asinhroni rad.")
             LicenseRow("Signiffia", "Apache-2.0", "Sopstveni kod aplikacije.")
             Spacer(Modifier.height(10.dp))

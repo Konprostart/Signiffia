@@ -38,6 +38,7 @@ import dev.signiffia.ui.components.ErrorNote
 import dev.signiffia.ui.components.FingerprintRow
 import dev.signiffia.ui.components.InfoRow
 import dev.signiffia.ui.components.SectionCard
+import dev.signiffia.ui.lock.AppLockGate
 import dev.signiffia.ui.components.StatusBadge
 import dev.signiffia.ui.components.WarningNote
 
@@ -69,6 +70,7 @@ fun KeyDetailScreen(
     val exporter = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
+        AppLockGate.exit()
         if (uri != null && record != null) {
             val name = safeFileName(record.displayName) +
                 "." + if (record.storeType.equals("JKS", true)) "jks" else "p12"
@@ -146,7 +148,7 @@ fun KeyDetailScreen(
             subtitle = "Izvoz daje standardni keystore fajl zaštićen tvojom lozinkom.",
         ) {
             Button(
-                onClick = { exporter.launch(safeFileName(record.displayName) + ".p12") },
+                onClick = { AppLockGate.enter(); exporter.launch(safeFileName(record.displayName) + ".p12") },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Izvezi keystore fajl") }
             Spacer(Modifier.height(8.dp))

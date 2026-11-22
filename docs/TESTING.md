@@ -1,4 +1,4 @@
-# Izveštaj o testiranju — Signiffia 1.1.0
+# Izveštaj o testiranju — Signiffia 1.2.0
 
 ## Okruženje
 
@@ -26,7 +26,7 @@ potpisuju APK i AAB, proveravaju potpise apksig-om, prave i otvaraju šifrovane 
 
 ## Rezultat
 
-**47 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
+**57 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
 zahteva stvarni, Gradle-om napravljen APK (`SIGNIFFIA_REAL_APK`); kada se ta promenljiva
 postavi, test se zaista izvršava i proverava potpis. Nijedan test koji ništa ne proverava
 ne izgleda kao „uspešan“.
@@ -39,6 +39,7 @@ ne izgleda kao „uspešan“.
 | `KeyRepositoryTest` | skladištenje ključeva, šifrovanje lozinki, uvoz, izvoz, brisanje, backup/restore, **multi-alias sa različitim lozinkama** |
 | `BackupManagerTest` | AES-GCM backup round-trip, pogrešna lozinka, oštećenje, fingerprint mismatch, neispravan fajl |
 | `SplitArchiveTest` | potpisivanje APKS/XAPK/APKM delova, očuvanje metapodataka, greška dela, **path traversal**, **previše stavki** |
+| `LockModelTest` | čista logika zaključavanja: režimi, odgode (0/30 s/1 min/5 min), `shouldRelockOnForeground` granični slučajevi, serijalizacija za perzistenciju |
 
 ## Šta je pokriveno po zahtevima
 
@@ -68,13 +69,18 @@ ne izgleda kao „uspešan“.
 1. **Objavljeni release APK** proveren zvaničnim `apksigner`: v1/v2/v3 ispravni.
 2. **APK potpisan Signiffia engine-om** proveren zvaničnim `apksigner` (`--min-sdk-version 18`).
 3. **AAB potpisan engine-om** proveren JDK `jarsigner -verify` (bez APK Signing Block-a).
-4. **Manifest objavljenog APK-a**: `aapt2 dump badging` — 0 `uses-permission`, paket
-   `dev.signiffia`, minSdk 26, targetSdk 36.
+4. **Manifest objavljenog APK-a**: `aapt2 dump badging` — paket `dev.signiffia`, minSdk 26,
+   targetSdk 36; dve `normal` biometrijske dozvole (`USE_BIOMETRIC`, `USE_FINGERPRINT`),
+   bez opasnih dozvola i bez INTERNET-a.
 
 ## Šta NIJE testirano u ovom okruženju
 
 - **Instalacija i rad interfejsa na fizičkom uređaju / emulatoru.** Okruženje nema
   `adb` niti `pm`, pa UI nije pokrenut na uređaju. U nastavku je ručna provera za telefon.
+- **Biometrija i PIN/šifra/šara uređaja (zaključavanje aplikacije).** `BiometricPrompt` i
+  `KeyguardManager` potvrda ne mogu se izvršiti na JVM-u niti u ovom okruženju (bez uređaja).
+  Automatski je testirana samo **čista logika** odluke o zaključavanju (`LockModelTest`);
+  sam sistemski dijalog zahteva ručnu proveru na uređaju (checklist u nastavku).
 - **Upload AAB-a na Google Play** (potreban Play nalog).
 - **bundletool validacija AAB-a.** Signiffia namerno ne uključuje bundletool: JAR (v1)
   potpis je format koji Play prihvata za upload, a dodavanje bundletool-a bi značajno
@@ -100,6 +106,19 @@ Izvrši na pravom uređaju (Android 8.0+):
 9. **Veliki fajl** — potpiši APK od nekoliko stotina MB i proveri da aplikacija ne padne
    (prikazuje jasnu grešku ako je fajl prevelik).
 10. **Offline** — isključi Wi-Fi i mobilne podatke; aplikacija mora raditi identično.
+11. **Zaključavanje → PIN uređaja** — uključi režim „PIN / šifra / šara uređaja“, napusti
+    aplikaciju i vrati se: mora tražiti potvrdu identiteta. Proveri odgode (odmah / 30 s /
+    1 min / 5 min) i da se posle ponovnog pokretanja aplikacija otvara zaključana.
+12. **Zaključavanje → biometrija + PIN rezerva** — na uređaju sa otiskom/licem proveri brzo
+    otključavanje i da PIN radi kao rezerva; na uređaju bez biometrije proveri da se koristi
+    PIN. Na Androidu 8.0/8.1, 9, 10 i 11+ proveri da nema pada.
+13. **SAF birač fajlova** — dok je zaključavanje uključeno sa odgodom „odmah“, izaberi fajl u
+    Potpiši / Proveri / Uvezi: aplikacija se ne sme zaključati odmah po povratku iz birača.
+14. **Pregled nedavnih aplikacija** — sa uključenim zaključavanjem proveri da je sadržaj
+    Signiffia skriven (crn/prazan snimak) i da slikanje ekrana nije moguće.
+15. **Uređaj bez ekrana zaključavanja** — ukloni PIN u Android podešavanjima; proveri da je
+    aktiviranje zaštite onemogućeno uz uputstvo, i da zaključana aplikacija nudi bezbedan
+    oporavak (isključi zaključavanje).
 
 ## Release build provera
 

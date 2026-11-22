@@ -34,6 +34,7 @@ import dev.signiffia.ui.components.FingerprintRow
 import dev.signiffia.ui.components.InfoRow
 import dev.signiffia.ui.components.SectionCard
 import dev.signiffia.ui.components.WarningNote
+import dev.signiffia.ui.lock.AppLockGate
 
 @Composable
 fun KeyImportScreen(vm: AppViewModel, onDone: (String) -> Unit) {
@@ -46,6 +47,7 @@ fun KeyImportScreen(vm: AppViewModel, onDone: (String) -> Unit) {
     val preview by vm.importPreview.collectAsStateWithLifecycle()
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         if (uri != null) {
             picked = uri
             if (displayName.isBlank()) {
@@ -69,7 +71,7 @@ fun KeyImportScreen(vm: AppViewModel, onDone: (String) -> Unit) {
             subtitle = "Podržani su PKCS12 (.p12/.pfx) i JKS (.jks). Fajl se kopira u aplikaciju; " +
                 "original ostaje netaknut.",
         ) {
-            OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { AppLockGate.enter(); picker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (picked == null) "Izaberi keystore fajl" else "Izaberi drugi fajl")
             }
             if (picked != null) {

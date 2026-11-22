@@ -36,15 +36,18 @@ import dev.signiffia.ui.components.InfoRow
 import dev.signiffia.ui.components.SectionCard
 import dev.signiffia.ui.components.StatusBadge
 import dev.signiffia.ui.components.WarningNote
+import dev.signiffia.ui.lock.AppLockGate
 
 @Composable
 fun CompareScreen(vm: AppViewModel) {
     val state by vm.compareState.collectAsStateWithLifecycle()
 
     val oldPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         uri?.let(vm::loadCompareOld)
     }
     val newPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         uri?.let(vm::loadCompareNew)
     }
 
@@ -64,7 +67,7 @@ fun CompareScreen(vm: AppViewModel) {
             title = "1. Stara verzija (već instalirana)",
             subtitle = "APK ili AAB koji je trenutno na uređaju / u prodavnici.",
         ) {
-            Button(onClick = { oldPicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { AppLockGate.enter(); oldPicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Izaberi staru verziju")
             }
             SideSummary(state.old)
@@ -75,7 +78,7 @@ fun CompareScreen(vm: AppViewModel) {
             title = "2. Nova verzija",
             subtitle = "Nova APK/AAB verzija koju planiraš da objaviš.",
         ) {
-            Button(onClick = { newPicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { AppLockGate.enter(); newPicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text("Izaberi novu verziju")
             }
             SideSummary(state.new)

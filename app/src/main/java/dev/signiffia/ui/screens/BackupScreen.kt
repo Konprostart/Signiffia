@@ -41,6 +41,7 @@ import dev.signiffia.ui.components.SectionCard
 import dev.signiffia.ui.components.StatusBadge
 import dev.signiffia.ui.components.WarningNote
 import dev.signiffia.ui.formatDate
+import dev.signiffia.ui.lock.AppLockGate
 
 @Composable
 fun BackupScreen(vm: AppViewModel) {
@@ -58,6 +59,7 @@ fun BackupScreen(vm: AppViewModel) {
     val backupSaver = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
+        AppLockGate.exit()
         if (uri != null) {
             vm.backupTo(uri, backupPassphrase.toCharArray(), selectedIds.toList())
             backupPassphrase = ""
@@ -65,6 +67,7 @@ fun BackupScreen(vm: AppViewModel) {
         }
     }
     val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         if (uri != null) {
             restoreUri = uri
             vm.clearRestorePreview()
@@ -143,6 +146,7 @@ fun BackupScreen(vm: AppViewModel) {
                             else -> null
                         }
                         if (backupError == null) {
+                            AppLockGate.enter()
                             backupSaver.launch("signiffia-backup-${System.currentTimeMillis() / 1000}.sgnbak")
                         }
                     },
@@ -165,7 +169,7 @@ fun BackupScreen(vm: AppViewModel) {
             title = "Vrati iz backup-a",
             subtitle = "Backup se prvo proveri (potpis i fingerprint svakog ključa), pa se ključevi vraćaju.",
         ) {
-            OutlinedButton(onClick = { restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { AppLockGate.enter(); restorePicker.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) {
                 Text(if (restoreUri == null) "Izaberi backup fajl" else "Izaberi drugi backup")
             }
             if (restoreUri != null) {

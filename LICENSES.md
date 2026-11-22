@@ -6,9 +6,10 @@ Ovaj dokument navodi sve spoljne komponente, njihove licence i način korišćen
 Nijedan projekat nije kopiran u celini; korišćene su biblioteke i, gde je navedeno,
 samo koncepti iz referentnih projekata.
 
-> Verzija 1.1.0 **nije dodala nijednu novu zavisnost**. Bundletool je namerno izostavljen:
-> JAR (v1) potpis AAB-a je format koji Google Play prihvata za upload, a dodavanje
-> bundletool-a bi značajno povećalo APK bez koristi za sam čin potpisivanja.
+> Verzija 1.2.0 dodaje **dve** Apache-2.0 zavisnosti za opciono zaključavanje aplikacije:
+> `androidx.biometric:biometric:1.1.0` i `androidx.fragment:fragment:1.6.2`. Bundletool je
+> namerno izostavljen: JAR (v1) potpis AAB-a je format koji Google Play prihvata za upload,
+> a dodavanje bundletool-a bi značajno povećalo APK bez koristi za sam čin potpisivanja.
 
 ---
 
@@ -54,6 +55,20 @@ DEALINGS IN THE SOFTWARE.
 - **Izvor:** https://developer.android.com/jetpack
 - **Kako se koristi:** korisnički interfejs (Compose + Material 3), SAF launcher-i,
   lifecycle/ViewModel, `PackageInfoCompat`.
+
+### AndroidX Biometric
+- **Verzija:** `androidx.biometric:biometric:1.1.0`
+- **Licenca:** Apache License 2.0
+- **Izvor:** https://developer.android.com/jetpack/androidx/releases/biometric
+- **Kako se koristi:** opciono zaključavanje aplikacije — `BiometricPrompt` (otisak prsta /
+  lice) sa PIN-om uređaja kao rezervom. Biometrijski podaci se obrađuju isključivo na
+  uređaju; aplikacija dobija samo potvrdu uspeha/neuspeha.
+
+### AndroidX Fragment
+- **Verzija:** `androidx.fragment:fragment:1.6.2`
+- **Licenca:** Apache License 2.0
+- **Izvor:** https://developer.android.com/jetpack/androidx/releases/fragment
+- **Kako se koristi:** `FragmentActivity` kao domaćin za `BiometricPrompt` (zahtev API-ja).
 
 ### Kotlin, Kotlin standard library, kotlinx.coroutines
 - **Verzije:** Kotlin 1.9.22, kotlinx-coroutines-android 1.7.3

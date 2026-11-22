@@ -3,6 +3,42 @@
 Sve značajne promene u ovom projektu. Format prati [Keep a Changelog](https://keepachangelog.com/),
 projekt se pridržava [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — neobjavljeno
+
+### Dodato
+
+- **Opciono zaključavanje aplikacije** (podrazumevano isključeno):
+  - **PIN / šifra / šara uređaja** — preko Android `KeyguardManager` potvrde (bez sopstvenog
+    PIN sistema, bez čuvanja PIN-a).
+  - **Biometrija (otisak prsta / bezbedno lice) sa PIN-om uređaja kao rezervom** — preko
+    `androidx.biometric` `BiometricPrompt` (API 26+; na API 30+ `BIOMETRIC_STRONG |
+    DEVICE_CREDENTIAL`, na starijim biometrija + zaseban PIN korak radi izbegavanja poznatog
+    pada na Androidu 9/10).
+  - Ekran podešavanja (`Zaključavanje`) i ekran za otključavanje.
+- Automatsko zaključavanje pri vraćanju iz pozadine, sa odgodom: odmah / 30 s / 1 min / 5 min.
+- `FLAG_SECURE` (skrivanje sadržaja u pregledu nedavnih aplikacija i onemogućavanje slika
+  ekrana) kada je zaključavanje uključeno.
+- Podešavanja se čuvaju u `SharedPreferences` i opstaju nakon ponovnog pokretanja.
+- Kada uređaj nema podešen PIN/šifru/šaru, aktiviranje zaštite je onemogućeno uz jasno
+  uputstvo; bezbedan oporavak ako korisnik kasnije ukloni ekran zaključavanja.
+- JVM unit testovi za čistu logiku zaključavanja (`LockModelTest`).
+
+### Bezbednost
+
+- Biometrijski podaci se obrađuju isključivo na uređaju (TEE/StrongBox); Signiffia ih nikada
+  ne dobija, već samo potvrdu uspeha/neuspeha.
+- PIN/šifra/šara se nikada ne čuva u aplikaciji — koristi se sistemski ekran za potvrdu.
+- Zaštita od beskonačnih petlji zaključavanja i od pogrešnog zaključavanja nakon SAF birača
+  fajlova (`AppLockGate`).
+- Zaključavanje ne menja postojeći kripto sistem (AES-256-GCM + Android Keystore) niti
+  format podataka.
+
+### Zavisnosti
+
+- Dodate dve Apache-2.0 zavisnosti: `androidx.biometric:biometric:1.1.0` i
+  `androidx.fragment:fragment:1.6.2`. Dve `normal`-dozvole (`USE_BIOMETRIC`,
+  `USE_FINGERPRINT`); i dalje **nema** opasnih dozvola, INTERNET-a ni mrežnog koda.
+
 ## [1.1.0] — neobjavljeno
 
 > **Napomena o potpisu:** verzija 1.1.0 je potpisana **novim** release ključem (originalni

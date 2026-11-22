@@ -67,6 +67,17 @@ kriptografije i nema cloud servisa.
 - Provera backup-a pre vraćanja (keystore se otvara i fingerprint se poredi).
 - Prikaz fingerprinta i upozorenje pre brisanja ključa.
 
+### Zaključavanje aplikacije
+
+- **Opciono** (podrazumevano isključeno), podesivo u **Zaključavanje** na početnom ekranu.
+- **PIN / šifra / šara uređaja** — koristi postojeći Android ekran zaključavanja; Signiffia
+  nikada ne čuva PIN.
+- **Otisak prsta / lice + PIN kao rezerva** — preko Android `BiometricPrompt`; biometrijski
+  podaci se obrađuju isključivo na uređaju.
+- Automatsko zaključavanje pri vraćanju iz pozadine (odmah / 30 s / 1 min / 5 min).
+- `FLAG_SECURE` skriva sadržaj u pregledu nedavnih aplikacija i onemogućava slike ekrana
+  dok je zaključavanje uključeno.
+
 ### Ograničenja
 
 - Zipalign se ne menja: Signiffia čuva poravnanje koje APK već ima.
@@ -91,8 +102,10 @@ Potrebno je **Android 8.0 (API 26) ili novije**.
 > Ako imaš instaliranu 1.0.0: prvo sačuvaj ključeve (izvoz `.p12`/`.jks` ili `.sgnbak` backup),
 > zatim deinstaliraj 1.0.0 i sveže instaliraj 1.1.0.
 
-> Aplikacija nema nijednu dozvolu — ni INTERNET. Fajlove biraš isključivo kroz sistemski
-> birač fajlova, koji daje pristup samo izabranom fajlu.
+> Aplikacija nema **opasnih** dozvola i nema INTERNET. Fajlove biraš isključivo kroz sistemski
+> birač fajlova, koji daje pristup samo izabranom fajlu. Jedine dozvole su dve `normal`
+> biometrijske dozvole (`USE_BIOMETRIC`, `USE_FINGERPRINT`), korišćene isključivo za opciono
+> zaključavanje otiskom prsta / licem.
 
 ---
 
@@ -145,6 +158,19 @@ Google Play prihvata za upload. AAB se ne može instalirati na telefon.
 - **Vrati iz backup-a**: izaberi `.sgnbak`, unesi lozinku. Signiffia prvo proveri svaki
   keystore i fingerprint, prikaže sadržaj, pa tek onda vraća ključeve.
 
+### Zaključavanje aplikacije
+
+**Zaključavanje** na početnom ekranu → izaberi režim:
+
+- **Isključeno** (podrazumevano);
+- **PIN / šifra / šara uređaja**;
+- **Otisak prsta / lice + PIN kao rezerva**.
+
+Ako uređaj nema podešen PIN/šifru/šaru, aktivne opcije su onemogućene uz uputstvo
+(*Podešavanja → Bezbednost → Zaključani ekran*). Signiffia ne čuva PIN niti biometrijske
+podatke — samo traži od Android sistema da potvrdi identitet. Podešavanje se čuva na uređaju
+i preživi ponovno pokretanje.
+
 ---
 
 ## Bezbednost ključeva
@@ -185,6 +211,8 @@ Google Play prihvata za upload. AAB se ne može instalirati na telefon.
 | Java | 17 |
 | Android apksig | 8.11.0 |
 | BouncyCastle | 1.79 (`bcprov`, `bcpkix`, `bcutil`) |
+| AndroidX Biometric | 1.1.0 |
+| AndroidX Fragment | 1.6.2 |
 
 Arhitektura:
 
@@ -203,7 +231,7 @@ Potrebno: JDK 17, Android SDK sa platformom 36 i build-tools 35.0.0, Gradle 8.14
 # debug APK
 ./gradlew :app:assembleDebug
 
-# unit testovi (47 testova)
+# unit testovi (57 testova)
 ./gradlew :app:testDebugUnitTest
 
 # release APK — OBAVEZNO sa eksplicitnim kredencijalima
@@ -232,7 +260,7 @@ Izlaz: `app/build/outputs/apk/debug/app-debug.apk` i
 
 ## Testiranje
 
-**Rezultat poslednjeg izvršavanja: 47 testova, 0 padova, 1 preskočen.** Preskočen je samo
+**Rezultat poslednjeg izvršavanja: 57 testova, 0 padova, 1 preskočen.** Preskočen je samo
 integracioni test sa stvarnim, Gradle-om napravljenim APK-om (`SIGNIFFIA_REAL_APK`); kada se
 ta promenljiva postavi, test se zaista izvršava.
 
@@ -278,6 +306,8 @@ app/src/main/java/dev/signiffia/
 │   ├── AndroidSecretCipher.kt # Android Keystore AES-GCM
 │   └── KeyRepository.kt     # skladište keystore-a + metapodaci
 └── ui/                      # Compose ekrani, tema, ViewModel
+    ├── lock/                # opciono zaključavanje (model, podešavanja, LockScreen)
+    └── screens/             # Home, Sign, Verify, Compare, Keys, Backup, Security, About
 app/src/test/java/dev/signiffia/   # JVM unit testovi
 docs/                              # dodatna dokumentacija
 ```
@@ -293,6 +323,7 @@ Korišćene biblioteke:
 - **Android apksig** — Apache-2.0 (glavni signing engine)
 - **BouncyCastle** — Bouncy Castle Licence (MIT stil)
 - **AndroidX / Jetpack Compose / Material 3** — Apache-2.0
+- **AndroidX Biometric i Fragment** — Apache-2.0 (opciono zaključavanje)
 - **Kotlin / kotlinx.coroutines** — Apache-2.0
 
 Detalji i atribucija: [LICENSES.md](LICENSES.md).

@@ -53,8 +53,11 @@ import dev.signiffia.ui.screens.KeyCreateScreen
 import dev.signiffia.ui.screens.KeyDetailScreen
 import dev.signiffia.ui.screens.KeyImportScreen
 import dev.signiffia.ui.screens.KeysScreen
+import dev.signiffia.ui.screens.SecurityScreen
 import dev.signiffia.ui.screens.SignScreen
 import dev.signiffia.ui.screens.VerifyScreen
+import dev.signiffia.ui.lock.AutoLockDelay
+import dev.signiffia.ui.lock.LockMode
 
 private enum class Route(val title: String) {
     Home("Signiffia"),
@@ -66,12 +69,20 @@ private enum class Route(val title: String) {
     KeyImport("Uvoz keystora"),
     KeyDetail("Detalji ključa"),
     Backup("Backup i vraćanje"),
+    Security("Zaključavanje"),
     About("O aplikaciji"),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot(vm: AppViewModel = viewModel()) {
+fun AppRoot(
+    lockMode: LockMode,
+    autoLockDelay: AutoLockDelay,
+    isDeviceSecure: Boolean,
+    biometricAvailable: Boolean,
+    onLockConfigChange: (LockMode, AutoLockDelay) -> Unit,
+    vm: AppViewModel = viewModel(),
+) {
     var routeName by rememberSaveable { mutableStateOf(Route.Home.name) }
     var detailKeyId by rememberSaveable { mutableStateOf<String?>(null) }
     val route = Route.valueOf(routeName)
@@ -131,6 +142,7 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
                     onCompare = { navigate(Route.Compare) },
                     onKeys = { navigate(Route.Keys) },
                     onBackup = { navigate(Route.Backup) },
+                    onSecurity = { navigate(Route.Security) },
                     onAbout = { navigate(Route.About) },
                 )
                 Route.Sign -> SignScreen(vm = vm, onOpenKeys = { navigate(Route.Keys) })
@@ -173,6 +185,13 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
                     }
                 }
                 Route.Backup -> BackupScreen(vm = vm)
+                Route.Security -> SecurityScreen(
+                    mode = lockMode,
+                    delay = autoLockDelay,
+                    isDeviceSecure = isDeviceSecure,
+                    biometricAvailable = biometricAvailable,
+                    onChange = onLockConfigChange,
+                )
                 Route.About -> AboutScreen()
             }
         }

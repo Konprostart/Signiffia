@@ -50,6 +50,7 @@ import dev.signiffia.ui.components.SchemeToggleRow
 import dev.signiffia.ui.components.SectionCard
 import dev.signiffia.ui.components.StatusBadge
 import dev.signiffia.ui.components.WarningNote
+import dev.signiffia.ui.lock.AppLockGate
 
 @Composable
 fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
@@ -58,14 +59,21 @@ fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
     val busy by vm.busy.collectAsStateWithLifecycle()
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        AppLockGate.exit()
         uri?.let(vm::loadSignInput)
     }
     val saver = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri -> uri?.let(vm::signTo) }
+    ) { uri ->
+        AppLockGate.exit()
+        uri?.let(vm::signTo)
+    }
     val idsigSaver = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri -> uri?.let(vm::savePendingIdsig) }
+    ) { uri ->
+        AppLockGate.exit()
+        uri?.let(vm::savePendingIdsig)
+    }
 
     Column(
         modifier = Modifier
@@ -80,14 +88,14 @@ fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
         ) {
             if (apk == null) {
                 Button(
-                    onClick = { picker.launch(arrayOf("*/*")) },
+                    onClick = { AppLockGate.enter(); picker.launch(arrayOf("*/*")) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Izaberi APK ili AAB") }
             } else {
                 ApkHeader(apk)
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
-                    onClick = { picker.launch(arrayOf("*/*")) },
+                    onClick = { AppLockGate.enter(); picker.launch(arrayOf("*/*")) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Izaberi drugi fajl") }
             }
@@ -193,6 +201,7 @@ fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
                 val canSign = state.selectedKeyId != null && busy == null
                 Button(
                     onClick = {
+                        AppLockGate.enter()
                         saver.launch(vm.suggestedOutputName())
                     },
                     enabled = canSign,
@@ -239,6 +248,7 @@ fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
                     SignResultCard(
                         result = result,
                         onSaveIdsig = {
+                            AppLockGate.enter()
                             idsigSaver.launch(
                                 result.fileName.removeSuffix(".apk") + ".apk.idsig"
                             )
