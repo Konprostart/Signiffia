@@ -36,8 +36,9 @@ kriptografije i nema cloud servisa.
 - Potpisivanje **AAB** (Android App Bundle) fajlova ispravnim JAR (v1) potpisom za Google Play upload.
 - Potpisivanje **split arhiva** (APKS/XAPK/APKM): svaki APK deo se potpisuje istim ključem,
   a ostali fajlovi arhive ostaju nepromenjeni.
-- Potpisne šeme: **v1, v2, v3, v3.1** (kada je primenljivo) i **v4** kao dodatna opcija
-  (pravi `.idsig` fajl za inkrementalnu instalaciju).
+- Potpisne šeme: **v1, v2, v3** i **v4** kao dodatna opcija (pravi `.idsig` fajl za
+  inkrementalnu instalaciju). **v3.1 (rotacija ključa) se proverava**, ali Signiffia ne
+  pravi `signing certificate lineage` — vidi [Ograničenja](#ograničenja).
 - Originalni fajl se **nikada ne menja**. Potpisuje se kopija, a rezultat se čuva tamo gde
   korisnik izabere (Storage Access Framework).
 - Posle potpisivanja potpis se **odmah proverava**; ako provera ne prođe, izlazni fajl se
@@ -48,6 +49,8 @@ kriptografije i nema cloud servisa.
 - Provera potpisa APK-a (v1/v2/v3/v3.1/v4), AAB-a (JAR) i svakog dela split arhive.
 - Prikaz sertifikata: subject, izdavalac, algoritam, veličina ključa, period važenja.
 - **SHA-256 i SHA-1 fingerprint** sertifikata (dodir za kopiranje).
+- **Poređenje potpisa dve verzije** (APK/AAB): proverava se da li koriste isti potpisni
+  ključ i da li je nova verzija kompatibilna kao nadogradnja postojeće.
 - Detekcija split arhiva i potpisivanje svih APK delova istim ključem.
 - Detekcija izmenjenog APK-a, nepotpisanog APK-a i oštećenih fajlova.
 - Prikaz grešaka i upozorenja iz apksig-a na razumljiv način.
@@ -56,7 +59,8 @@ kriptografije i nema cloud servisa.
 
 - Kreiranje novog potpisnog ključa: RSA 2048/3072/4096 ili EC P-256/P-384, sa sopstvenim
   subject podacima i periodom važenja.
-- Uvoz postojećih **JKS** i **PKCS12** keystore fajlova (i keystore-a sa više alijasa).
+- Uvoz postojećih **JKS** i **PKCS12** keystore fajlova (i keystore-a sa više alijasa,
+  pri čemu **svaki alijas može imati sopstvenu lozinku**).
 - Izbor ključa i alijasa za potpisivanje.
 - Izvoz keystore fajla (standardni `.p12` / `.jks`).
 - Šifrovan **backup** svih ili pojedinih ključeva i **restore** na drugi uređaj.
@@ -80,6 +84,12 @@ kriptografije i nema cloud servisa.
 5. Pokreni Signiffia.
 
 Potrebno je **Android 8.0 (API 26) ili novije**.
+
+> **Napomena o nadogradnji sa 1.0.0:** verzija 1.1.0 je potpisana **novim** release ključem
+> (originalni ključ iz 1.0.0 više nije dostupan). Zato se 1.1.0 **ne može instalirati kao
+> obična nadogradnja preko 1.0.0** — Android će odbiti instalaciju zbog različitog sertifikata.
+> Ako imaš instaliranu 1.0.0: prvo sačuvaj ključeve (izvoz `.p12`/`.jks` ili `.sgnbak` backup),
+> zatim deinstaliraj 1.0.0 i sveže instaliraj 1.1.0.
 
 > Aplikacija nema nijednu dozvolu — ni INTERNET. Fajlove biraš isključivo kroz sistemski
 > birač fajlova, koji daje pristup samo izabranom fajlu.
@@ -149,8 +159,13 @@ Google Play prihvata za upload. AAB se ne može instalirati na telefon.
   uz eksplicitnu potvrdu korisnika.
 - Backup je dodatno šifrovan lozinkom koju korisnik izabere (PBKDF2-HMAC-SHA256, 210 000
   iteracija). Lozinke ključeva su unutar šifrovanog dela backup-a.
-- Ako se Android Keystore ključ izgubi (reinstalacija, novi uređaj), keystore fajlovi ostaju
-  sačuvani, a lozinka se ponovo unosi (**Ponovo unesi lozinku** u detaljima ključa).
+- Ako Android Keystore ključ postane nedostupan, a keystore fajlovi su **i dalje** u
+  privatnom skladištu aplikacije (npr. vraćanje app-podataka bez Keystore ključa), lozinka
+  se ponovo unosi (**Ponovo unesi lozinku** u detaljima ključa).
+- **Nakon prave reinstalacije (deinstalacija + instalacija) ili prelaska na novi telefon,
+  keystore fajlovi NE preživljavaju** (`allowBackup=false`). Jedini pouzdan oporavak je
+  `.sgnbak` backup ili izvezeni `.p12`/`.jks` fajl — zato **napravi backup odmah** i čuvaj
+  ga van telefona.
 
 > Signiffia ne pravi i ne čuva tvoj produkcioni ključ za druge aplikacije. Ključeve koje
 > napraviš u aplikaciji ti kontrolišeš i izvoziš ih kad želiš.
@@ -188,10 +203,10 @@ Potrebno: JDK 17, Android SDK sa platformom 36 i build-tools 35.0.0, Gradle 8.14
 # debug APK
 ./gradlew :app:assembleDebug
 
-# unit testovi (40 testova)
+# unit testovi (47 testova)
 ./gradlew :app:testDebugUnitTest
 
-# release APK (potpisuje se keystore-om iz signing/ ako postoje kredencijali)
+# release APK — OBAVEZNO sa eksplicitnim kredencijalima
 export SIGNIFFIA_STORE_PASSWORD='...'
 export SIGNIFFIA_KEY_ALIAS='signiffia'
 export SIGNIFFIA_KEY_PASSWORD='...'
@@ -203,26 +218,36 @@ export SIGNIFFIA_KEY_PASSWORD='...'
 Izlaz: `app/build/outputs/apk/debug/app-debug.apk` i
 `app/build/outputs/apk/release/app-release.apk`.
 
+> **Release build se nikada ne potpisuje debug ključem.** Ako keystore
+> (`signing/signiffia-release.jks`) ili bilo koji kredencijal nedostaje, `assembleRelease`
+> **pada sa jasnom greškom** umesto da neprimetno napravi debug-potpisan "release". Za
+> razvoj koristi `assembleDebug`.
+>
 > Keystore za objavljivanje (`signing/signiffia-release.jks`) nije u repozitorijumu. Za svoj
-> release napravi svoj ključ i postavi gornje promenljive okruženja.
+> release napravi svoj ključ (npr. `keytool -genkeypair -v -keystore
+> signing/signiffia-release.jks -alias signiffia -keyalg RSA -keysize 4096 -validity 10950`)
+> i postavi gornje promenljive okruženja.
 
 ---
 
 ## Testiranje
 
-**Rezultat poslednjeg izvršavanja: 40 testova, 0 padova** (uključujući potpisivanje
-stvarnog Gradle release APK-a i proveru zvaničnim `apksigner` alatom).
+**Rezultat poslednjeg izvršavanja: 47 testova, 0 padova, 1 preskočen.** Preskočen je samo
+integracioni test sa stvarnim, Gradle-om napravljenim APK-om (`SIGNIFFIA_REAL_APK`); kada se
+ta promenljiva postavi, test se zaista izvršava.
 
 Testovi se izvršavaju na JVM-u (`app/src/test/`) i pokrivaju:
 
-- generisanje RSA/EC ključa i ponovno otvaranje keystore-a;
-- uvoz JKS i PKCS12 keystore-a, pogrešnu lozinku, oštećen fajl;
-- potpisivanje v1/v2/v3 i v4 (+`.idsig`), proveru potpisa;
+- generisanje RSA (2048/3072/4096) i EC (P-256/P-384/P-521) ključa i ponovno otvaranje keystore-a;
+- uvoz JKS i PKCS12 keystore-a (uključujući multi-alias sa različitim lozinkama po alijasu),
+  pogrešnu lozinku, oštećen fajl;
+- potpisivanje v1/v2/v3 i v4 (+`.idsig`), proveru potpisa, velike fajlove;
 - detekciju izmenjenog APK-a (tamper) i nepotpisanog APK-a;
 - da ulazni APK ostaje nepromenjen (SHA-256 pre i posle);
 - AAB JAR potpis i odsustvo APK Signing Block-a u AAB-u;
 - backup/restore round-trip, pogrešnu backup lozinku, oštećen backup, fingerprint mismatch;
 - gubitak Android Keystore ključa i oporavak ponovnim unosom lozinke;
+- zaštitu od zlonamernih arhiva (path traversal, previše stavki);
 - da se keystore ne briše i ne regeneriše greškom.
 
 ```bash
@@ -280,11 +305,29 @@ preuzet).
 
 ## Ograničenja
 
+- **Verzija 1.1.0 je potpisana novim release ključem** i nije kompatibilna kao in-place
+  nadogradnja preko 1.0.0 (različiti sertifikat, bez lineage-a). Vidi napomenu u
+  [Instalacija](#instalacija).
 - Ne menja `AndroidManifest.xml`, ne optimizuje niti kompresuje APK.
 - Ako APK koristi `extractNativeLibs=false`, poravnanje native biblioteka se čuva onako kako
   je u ulaznom fajlu (Signiffia ne pomera sadržaj).
+- **v3.1 (rotacija ključa / proof-of-rotation) se proverava, ali se ne generiše.** Signiffia
+  ne pravi `signing certificate lineage`, pa ne može da obavi rotaciju ključa postojeće
+  aplikacije. Za standardno potpisivanje (v1/v2/v3) ovo nije ograničenje.
 - AAB se proverava JAR proverom; kompletnu validaciju za Google Play (bundletool) Signiffia ne
-  radi.
+  radi. JAR (v1) potpis je format koji Google Play prihvata za upload, ali Signiffia ne
+  validira sam sadržaj bundle-a.
+
+### Zaštita od zlonamernih arhiva
+
+Signiffia ograničava obradu arhiva (APKS/XAPK/APKM i backup) kako bi sprečila ZIP bombe,
+iscrpljivanje memorije i path traversal:
+
+- najviše 10 000 stavki po arhivi;
+- ograničenje ukupne raspakovane veličine i veličine pojedinačne stavke;
+- odbijanje sumnjivih putanja (`..`, apsolutne putanje, `\`);
+- streaming obrada velikih fajlova umesto učitavanja celih u memoriju;
+- jasna greška kada fajl ne može bezbedno da se obradi.
 
 ---
 

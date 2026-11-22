@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.signiffia.ui.screens.AboutScreen
 import dev.signiffia.ui.screens.BackupScreen
+import dev.signiffia.ui.screens.CompareScreen
 import dev.signiffia.ui.screens.HomeScreen
 import dev.signiffia.ui.screens.KeyCreateScreen
 import dev.signiffia.ui.screens.KeyDetailScreen
@@ -58,6 +60,7 @@ private enum class Route(val title: String) {
     Home("Signiffia"),
     Sign("Potpisivanje"),
     Verify("Provera potpisa"),
+    Compare("Poređenje potpisa"),
     Keys("Ključevi"),
     KeyCreate("Novi ključ"),
     KeyImport("Uvoz keystora"),
@@ -125,12 +128,14 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
                     keyCount = keys.size,
                     onSign = { navigate(Route.Sign) },
                     onVerify = { navigate(Route.Verify) },
+                    onCompare = { navigate(Route.Compare) },
                     onKeys = { navigate(Route.Keys) },
                     onBackup = { navigate(Route.Backup) },
                     onAbout = { navigate(Route.About) },
                 )
                 Route.Sign -> SignScreen(vm = vm, onOpenKeys = { navigate(Route.Keys) })
                 Route.Verify -> VerifyScreen(vm = vm)
+                Route.Compare -> CompareScreen(vm = vm)
                 Route.Keys -> KeysScreen(
                     vm = vm,
                     onOpenKey = { id ->
@@ -200,7 +205,9 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
 
     val lockedId = vaultLockedKeyId
     if (lockedId != null) {
-        var password by remember { mutableStateOf("") }
+        val lockedRecord = keys.firstOrNull { it.id == lockedId }
+        var storePassword by remember(lockedId) { mutableStateOf("") }
+        var aliasPasswords by remember(lockedId) { mutableStateOf<Map<String, String>>(emptyMap()) }
         AlertDialog(
             onDismissRequest = { vm.dismissVaultLock() },
             title = { Text("Potrebna lozinka") },
@@ -211,22 +218,46 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
                             "da je Signiffia ponovo bezbedno sačuva. Ključ se ne menja.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
+                        value = storePassword,
+                        onValueChange = { storePassword = it },
                         label = { Text("Lozinka keystore-a") },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     )
+                    if (lockedRecord != null && lockedRecord.isMultiAlias) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Lozinke pojedinačnih alijasa (ostavi prazno ako su iste kao lozinka keystore-a):",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        lockedRecord.aliases.forEach { alias ->
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = aliasPasswords[alias] ?: "",
+                                onValueChange = { aliasPasswords = aliasPasswords + (alias to it) },
+                                label = { Text("Lozinka za \"$alias\"") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (password.isNotEmpty()) {
-                        vm.unlockKey(lockedId, password.toCharArray())
-                        password = ""
+                    if (storePassword.isNotEmpty()) {
+                        val aliases = lockedRecord?.aliases.orEmpty()
+                        val keyPasswords = aliases.associate { alias ->
+                            val entered = aliasPasswords[alias]?.trim().orEmpty()
+                            alias to (if (entered.isEmpty()) storePassword.toCharArray() else entered.toCharArray())
+                        }
+                        vm.unlockKey(lockedId, storePassword.toCharArray(), keyPasswords)
+                        storePassword = ""
+                        aliasPasswords = emptyMap()
                     }
                 }) { Text("Otključaj") }
             },

@@ -133,9 +133,33 @@ data class VerifyUiState(
     val error: String? = null,
 )
 
+data class CompareSide(
+    val summary: ApkSummary? = null,
+    val report: VerificationReport? = null,
+    val error: String? = null,
+) {
+    val loaded: Boolean get() = summary != null || error != null
+}
+
+data class CompareUiState(
+    val old: CompareSide = CompareSide(),
+    val new: CompareSide = CompareSide(),
+)
+
 data class RestorePreview(
     val file: File,
     val summary: dev.signiffia.core.BackupSummary,
+)
+
+/** A single alias discovered while importing a keystore, shown before the import. */
+data class ImportAliasInfo(
+    val alias: String,
+    val keyDescription: String,
+    val fingerprintSha256: String,
+)
+
+data class ImportPreview(
+    val aliases: List<ImportAliasInfo>,
 )
 
 data class BackupUiState(
@@ -172,8 +196,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _verifyState = MutableStateFlow(VerifyUiState())
     val verifyState: StateFlow<VerifyUiState> = _verifyState.asStateFlow()
 
+    private val _compareState = MutableStateFlow(CompareUiState())
+    val compareState: StateFlow<CompareUiState> = _compareState.asStateFlow()
+
     private val _backupState = MutableStateFlow(BackupUiState())
     val backupState: StateFlow<BackupUiState> = _backupState.asStateFlow()
+
+    private val _importPreview = MutableStateFlow<ImportPreview?>(null)
+    val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
 
     private val _vaultLockedKeyId = MutableStateFlow<String?>(null)
     val vaultLockedKeyId: StateFlow<String?> = _vaultLockedKeyId.asStateFlow()
@@ -235,11 +265,48 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Opens the selected keystore with the store password and lists its private-key
+     * aliases, so the import screen can ask for a (possibly different) password per alias.
+     */
+    fun previewImport(sourceUri: Uri, storePassword: CharArray) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Čitam keystore…")
+            _importPreview.value = null
+            try {
+                val preview = withContext(Dispatchers.IO) {
+                    val local = copyToWork(sourceUri, "import")
+                    val type = KeystoreTools.detectType(local)
+                    val keyStore = KeystoreTools.load(local, type, storePassword)
+                    val keyAliases = KeystoreTools.aliases(keyStore).filter { it.hasPrivateKey }
+                    if (keyAliases.isEmpty()) {
+                        throw KeystoreException("Keystore ne sadrži privatni ključ (samo sertifikati).")
+                    }
+                    ImportPreview(
+                        keyAliases.map { info ->
+                            ImportAliasInfo(
+                                alias = info.alias,
+                                keyDescription = info.certificate
+                                    ?.let { CertUtils.publicKeyDescription(it) } ?: "?",
+                                fingerprintSha256 = info.fingerprintSha256 ?: "",
+                            )
+                        }
+                    )
+                }
+                _importPreview.value = preview
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
     fun importKey(
         sourceUri: Uri,
         displayName: String,
         storePassword: CharArray,
-        keyPassword: CharArray?,
+        keyPasswords: Map<String, CharArray>,
         onDone: (KeyRecord) -> Unit,
     ) {
         viewModelScope.launch {
@@ -247,19 +314,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val record = withContext(Dispatchers.IO) {
                     val local = copyToWork(sourceUri, "import")
-                    val type = KeystoreTools.detectType(local)
-                    val keyStore = KeystoreTools.load(local, type, storePassword)
-                    val keyAliases = KeystoreTools.aliases(keyStore).filter { it.hasPrivateKey }
-                    val passwords = keyAliases.associate { it.alias to (keyPassword ?: storePassword) }
                     repository.importKeystore(
                         KeyImportRequest(
                             sourceFile = local,
                             displayName = displayName.ifBlank { queryDisplayName(sourceUri) ?: local.name },
                             storePassword = storePassword,
-                            keyPasswords = passwords,
+                            keyPasswords = keyPasswords,
                         )
                     )
                 }
+                _importPreview.value = null
                 refreshKeys()
                 _message.value = UiMessage("Keystore \"${record.displayName}\" je uvezen.")
                 onDone(record)
@@ -269,6 +333,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _busy.value = null
             }
         }
+    }
+
+    fun clearImportPreview() {
+        _importPreview.value = null
     }
 
     data class AliasDetail(
@@ -343,16 +411,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Re-enters keystore passwords after the Android Keystore key was lost. */
-    fun unlockKey(id: String, storePassword: CharArray) {
+    fun unlockKey(id: String, storePassword: CharArray, keyPasswords: Map<String, CharArray>) {
         viewModelScope.launch {
             _busy.value = BusyState("Otključavam ključ…")
             try {
                 withContext(Dispatchers.IO) {
-                    val record = repository.get(id) ?: throw KeystoreException("Ključ nije pronađen.")
-                    repository.setPasswords(
-                        id, storePassword,
-                        record.aliases.associateWith { storePassword },
-                    )
+                    repository.setPasswords(id, storePassword, keyPasswords)
                 }
                 _vaultLockedKeyId.value = null
                 refreshKeys()
@@ -420,6 +484,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearSignInput() {
+        _signState.value.apk?.file?.let { runCatching { it.delete() } }
+        pendingIdsig?.let { runCatching { it.delete() } }
         _signState.value = SignUiState()
         pendingIdsig = null
         refreshKeys()
@@ -465,12 +531,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     val sha = sha256Of(outcome.output)
+                    val sizeBytes = outcome.output.length()
                     val savedName = writeToSaf(destination, outcome.output)
+                    // The signed copy is already handed to SAF; drop the cache copy now
+                    // so signed artifacts do not linger in app cache.
+                    outcome.output.delete()
                     pendingIdsig = outcome.idsigFile
                     SignUiResult(
                         fileName = outcome.output.name,
                         savedName = savedName,
-                        sizeBytes = outcome.output.length(),
+                        sizeBytes = sizeBytes,
                         sha256 = sha,
                         isBundle = summary.isBundle,
                         report = outcome.report,
@@ -515,7 +585,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _busy.value = BusyState("Potpisujem ${summary.splitApkNames.size} APK delova…")
             val started = System.currentTimeMillis()
             try {
-                val (result, sha) = withContext(Dispatchers.IO) {
+                val result = withContext(Dispatchers.IO) {
                     val identity = repository.resolveIdentity(record, alias)
                     val output = File(workDir, "signed-${System.currentTimeMillis()}.zip")
                     val outcome = SplitArchive.sign(
@@ -527,15 +597,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         workDir = workDir,
                     )
                     val digest = sha256Of(outcome.output)
+                    val sizeBytes = outcome.output.length()
                     val saved = writeToSaf(destination, outcome.output)
+                    outcome.output.delete()
                     SplitUiResult(
                         fileName = outcome.output.name,
                         savedName = saved,
-                        sizeBytes = outcome.output.length(),
+                        sizeBytes = sizeBytes,
                         sha256 = digest,
                         parts = outcome.parts,
                         durationMs = System.currentTimeMillis() - started,
-                    ) to digest
+                    )
                 }
                 _signState.update { it.copy(splitResult = result, result = null, error = null) }
                 _message.value = UiMessage("Svi delovi su potpisani i provereni.")
@@ -562,6 +634,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _message.value = UiMessage("v4 .idsig fajl je sačuvan.")
                 _signState.update { it.copy(pendingIdsigName = null) }
+                idsig.delete()
                 pendingIdsig = null
             } catch (t: Throwable) {
                 _message.value = UiMessage(t.friendlyMessage(), isError = true)
@@ -628,6 +701,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearVerify() {
         _verifyState.value = VerifyUiState()
+    }
+
+    // --------------------------------------------------------------- compare
+
+    fun loadCompareOld(uri: Uri) = loadCompareSide(uri, isOld = true)
+    fun loadCompareNew(uri: Uri) = loadCompareSide(uri, isOld = false)
+
+    private fun loadCompareSide(uri: Uri, isOld: Boolean) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Proveravam potpis…")
+            try {
+                val (summary, report) = withContext(Dispatchers.IO) {
+                    val local = copyToWork(uri, if (isOld) "compare-old" else "compare-new")
+                    val s = readSummary(local, queryDisplayName(uri) ?: local.name)
+                    val r = if (s.isBundle) {
+                        SigningEngine.verifyJar(local)
+                    } else if (s.isSplitArchive) {
+                        throw SigningException("Poređenje split arhiva nije podržano — uporedi pojedinačne APK delove.")
+                    } else {
+                        SigningEngine.verify(local, minSdk = s.minSdk ?: SigningEngine.DEFAULT_MIN_SDK)
+                    }
+                    s to r
+                }
+                _compareState.update { state ->
+                    val side = CompareSide(summary = summary, report = report)
+                    if (isOld) state.copy(old = side) else state.copy(new = side)
+                }
+            } catch (t: Throwable) {
+                _compareState.update { state ->
+                    val side = CompareSide(error = t.friendlyMessage())
+                    if (isOld) state.copy(old = side) else state.copy(new = side)
+                }
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun clearCompare() {
+        _compareState.value = CompareUiState()
     }
 
     // ---------------------------------------------------------------- backup

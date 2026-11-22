@@ -6,6 +6,10 @@ Ovaj dokument navodi sve spoljne komponente, njihove licence i način korišćen
 Nijedan projekat nije kopiran u celini; korišćene su biblioteke i, gde je navedeno,
 samo koncepti iz referentnih projekata.
 
+> Verzija 1.1.0 **nije dodala nijednu novu zavisnost**. Bundletool je namerno izostavljen:
+> JAR (v1) potpis AAB-a je format koji Google Play prihvata za upload, a dodavanje
+> bundletool-a bi značajno povećalo APK bez koristi za sam čin potpisivanja.
+
 ---
 
 ## Glavne biblioteke

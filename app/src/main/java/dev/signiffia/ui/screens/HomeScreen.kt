@@ -41,6 +41,7 @@ fun HomeScreen(
     keyCount: Int,
     onSign: () -> Unit,
     onVerify: () -> Unit,
+    onCompare: () -> Unit,
     onKeys: () -> Unit,
     onBackup: () -> Unit,
     onAbout: () -> Unit,
@@ -70,6 +71,13 @@ fun HomeScreen(
             title = "Proveri potpis",
             description = "Vidi ko je potpisao APK, koje šeme koristi i da li je izmenjen.",
             onClick = onVerify,
+        )
+        Spacer(Modifier.height(10.dp))
+        ActionCard(
+            icon = Icons.Filled.Share,
+            title = "Uporedi potpise",
+            description = "Proveri da li su dve verzije aplikacije potpisane istim ključem.",
+            onClick = onCompare,
         )
         Spacer(Modifier.height(10.dp))
         ActionCard(

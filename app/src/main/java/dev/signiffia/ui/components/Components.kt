@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -108,7 +109,10 @@ fun FingerprintRow(label: String, fingerprint: String, modifier: Modifier = Modi
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable {
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Kopiraj $label",
+            ) {
                 clipboard.setText(AnnotatedString(fingerprint))
                 copied = true
             }

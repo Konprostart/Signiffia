@@ -169,8 +169,8 @@ fun SignScreen(vm: AppViewModel, onOpenKeys: () -> Unit) {
                             onCheckedChange = { vm.setSchemes(state.v1, it, state.v3, state.v4) },
                         )
                         SchemeToggleRow(
-                            title = "v3 (v3 + v3.1 rotacija)",
-                            description = "Android 9+ — podrška za rotaciju ključa",
+                            title = "v3 (APK Signature Scheme v3)",
+                            description = "Android 9+ — preporučeno uz v2",
                             checked = state.v3,
                             onCheckedChange = { vm.setSchemes(state.v1, it || state.v2, it, state.v4) },
                         )

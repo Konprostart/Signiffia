@@ -4,8 +4,10 @@ plugins {
 }
 
 val releaseKeystore = rootProject.file("signing/signiffia-release.jks")
-// Never fall back to a guessed password: without explicit credentials the release build
-// is signed with the local debug key instead.
+
+// Release signing is opt-in and explicit. The release variant is NEVER signed with the
+// local debug key: when credentials are missing it is left unsigned, and the guard below
+// fails the release build loudly instead of producing a misleading "release" APK.
 val releaseStorePassword = System.getenv("SIGNIFFIA_STORE_PASSWORD")
 val releaseKeyAlias = System.getenv("SIGNIFFIA_KEY_ALIAS")
 val releaseKeyPassword = System.getenv("SIGNIFFIA_KEY_PASSWORD")
@@ -13,6 +15,26 @@ val canSignRelease = releaseKeystore.exists() &&
     !releaseStorePassword.isNullOrBlank() &&
     !releaseKeyAlias.isNullOrBlank() &&
     !releaseKeyPassword.isNullOrBlank()
+
+// Fail fast, before any work, when a release build is requested without explicit
+// signing credentials. This is the "clear configuration check" that must never let a
+// debug key sneak into a production release.
+if (!canSignRelease) {
+    val requested = gradle.startParameter.taskNames
+    val wantsRelease = requested.any {
+        it.contains("Release", ignoreCase = true)
+    }
+    if (wantsRelease) {
+        throw GradleException(
+            "Release build requested, but no signing credentials are configured.\n" +
+                "Create the keystore at signing/signiffia-release.jks and set the environment " +
+                "variables SIGNIFFIA_STORE_PASSWORD, SIGNIFFIA_KEY_ALIAS and " +
+                "SIGNIFFIA_KEY_PASSWORD (see README.md), or build the debug variant " +
+                "(assembleDebug) instead.\n" +
+                "Signiffia never signs a release with the debug key."
+        )
+    }
+}
 
 android {
     namespace = "dev.signiffia"
@@ -23,8 +45,8 @@ android {
         applicationId = "dev.signiffia"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -48,7 +70,10 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // No fallback to the debug key. Without credentials the release APK is
+            // explicitly unsigned (and the configuration guard above rejects an explicit
+            // assembleRelease request anyway).
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

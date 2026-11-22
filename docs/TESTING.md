@@ -1,13 +1,18 @@
-# Izveštaj o testiranju — Signiffia 1.0.0
+# Izveštaj o testiranju — Signiffia 1.1.0
 
-Datum: 2026-11-10
-Okruženje: Linux (PocketDev), JDK 17.0.20.1, Gradle 8.14.3, Android SDK 36,
-build-tools 35.0.0 (ARM64).
+## Okruženje
+
+- Linux (PocketDev, ARM64), JDK 17.0.20.1, Gradle 8.14.3, Android SDK 36,
+  build-tools 35.0.0 (ARM64).
+- JVM unit testovi u `app/src/test/` — bez Android emulatora.
 
 ## Kako je testirano
 
 ```bash
-# Svi JVM unit testovi (uključuju potpisivanje stvarnog, Gradle-om napravljenog APK-a)
+# Svi JVM unit testovi
+gradle :app:testDebugUnitTest
+
+# Integracioni test sa stvarnim, Gradle-om napravljenim APK-om (opciono)
 SIGNIFFIA_REAL_APK=$PWD/app/build/outputs/apk/release/app-release.apk \
   gradle :app:testDebugUnitTest
 
@@ -21,114 +26,84 @@ potpisuju APK i AAB, proveravaju potpise apksig-om, prave i otvaraju šifrovane 
 
 ## Rezultat
 
-**40 testova, 0 padova, 0 preskočenih.**
+**47 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
+zahteva stvarni, Gradle-om napravljen APK (`SIGNIFFIA_REAL_APK`); kada se ta promenljiva
+postavi, test se zaista izvršava i proverava potpis. Nijedan test koji ništa ne proverava
+ne izgleda kao „uspešan“.
 
-| Test klasa | Testova | Vreme | Šta pokriva |
-|---|---:|---:|---|
-| `KeystoreToolsTest` | 9 | 5.9 s | generisanje RSA/EC ključa, ponovno otvaranje, JKS/PKCS12, pogrešna lozinka, oštećen fajl, neusklađen ključ/sertifikat |
-| `SigningEngineTest` | 12 | 10.1 s | potpisivanje v1/v2/v3/v4, provera, tamper, AAB JAR potpis, stvarni APK |
-| `KeyRepositoryTest` | 10 | 10.0 s | skladištenje ključeva, šifrovanje lozinki, uvoz, izvoz, brisanje, backup/restore |
-| `BackupManagerTest` | 6 | 11.7 s | AES-GCM backup round-trip, pogrešna lozinka, oštećenje, fingerprint mismatch |
-| `SplitArchiveTest` | 3 | 5.6 s | potpisivanje APKS/XAPK/APKM delova, očuvanje metapodataka, greška dela |
+| Test klasa | Šta pokriva |
+|---|---|
+| `KeystoreToolsTest` | generisanje RSA/EC ključa, ponovno otvaranje, JKS/PKCS12, pogrešna lozinka, oštećen fajl, neusklađen ključ/sertifikat |
+| `KeystoreSizesTest` | sve veličine ključeva: RSA 2048/3072/4096 i EC P-256/P-384/P-521 (generisanje + potpisivanje) |
+| `SigningEngineTest` | potpisivanje v1/v2/v3/v4, provera, tamper, AAB JAR potpis, veliki APK, veliki AAB član, stvarni APK (integraciono) |
+| `KeyRepositoryTest` | skladištenje ključeva, šifrovanje lozinki, uvoz, izvoz, brisanje, backup/restore, **multi-alias sa različitim lozinkama** |
+| `BackupManagerTest` | AES-GCM backup round-trip, pogrešna lozinka, oštećenje, fingerprint mismatch, neispravan fajl |
+| `SplitArchiveTest` | potpisivanje APKS/XAPK/APKM delova, očuvanje metapodataka, greška dela, **path traversal**, **previše stavki** |
 
-Ukupno vreme izvršavanja: ~45 s (bez kompilacije).
+## Šta je pokriveno po zahtevima
 
-## Spisak izvršenih testova
+- **RSA 2048 / 3072 / 4096** — `KeystoreSizesTest` (generisanje + potpisivanje svakog).
+- **EC P-256 / P-384 / P-521** — `KeystoreSizesTest` (generisanje + potpisivanje svakog).
+- **Različite lozinke po alijasu** — `KeyRepositoryTest.multi-alias keystore with a
+  different password per alias…`: pravi JKS sa dva privatna ključa zaštićena različitim
+  lozinkama, uvozi ga i proverava da se **oba** alijasa mogu koristiti za potpisivanje.
+- **Veliki fajlovi** — `SigningEngineTest` potpisuje ~8 MiB APK i proverava JAR/AAB sa
+  ~4 MiB članom; obrada je streaming.
+- **Neispravne / zlonamerne arhive** — `SplitArchiveTest` odbija path traversal (`..`) i
+  arhivu sa preko 10 000 stavki; `BackupManagerTest` odbija oštećene i neispravne backup-e.
+- **Oštećeni fajlovi i pogrešne lozinke** — `KeystoreToolsTest`, `BackupManagerTest`,
+  `SigningEngineTest` (tamper).
+- **Backup i restore na drugom uređaju** — `KeyRepositoryTest` simulira novi uređaj
+  (`FakeCipher` sa drugim ključem) i vraća ključeve iz backup-a.
 
-### KeystoreToolsTest
+## Preskočeni testovi
 
-- generated RSA keystore can be reopened and the key matches the certificate
-- generated EC keystore works and uses a P-256 curve
-- wrong password gives a clear error and never corrupts the file
-- JKS keystores are read and written by the built-in JKS provider
-- PKCS12 type is detected from the header
-- keystore with a mismatched key is rejected
-- generation validates the input
-- verifyKeystore checks the expected fingerprint
-- corrupt keystore file is rejected without crashing
-
-### SigningEngineTest
-
-- signs an APK with v1 v2 and v3 and verification passes
-- v2 and v3 only signing verifies on Android 7+
-- v1 only signing verifies for older platforms
-- v3 without v2 is upgraded automatically
-- v4 signing writes an idsig file that verifies
-- the original APK is never modified
-- tampered APK fails verification instead of being reported as valid
-- unsigned APK is reported as unsigned
-- garbage input fails with a clear message
-- output must differ from input
-- AAB gets a JAR v1 signature and no v2 block
-- **signing a real built APK produces a Play and device installable signature**
-
-### KeyRepositoryTest
-
-- generated key is stored encrypted and can sign
-- imported PKCS12 and JKS keystores are usable
-- import with a wrong password stores nothing
-- delete removes the file and the record
-- rename keeps the same key material
-- a lost device key locks passwords but never deletes the keystore
-- backup and restore move keys to a fresh install
-- restoring the same backup twice does not overwrite the first copy
-- export writes a readable keystore file
-- repository index survives a reopen
-
-### BackupManagerTest
-
-- backup roundtrip restores usable keystores
-- wrong backup password is rejected
-- corrupted backup is rejected
-- backup with a fingerprint mismatch is rejected
-- short passphrase is refused
-- random file is not detected as a backup
-
-### SplitArchiveTest
-
-- all APK parts are signed with the same key and other files are preserved
-- signed parts differ from the unsigned ones
-- archive with a broken part fails without leaving an output
+- `SigningEngineTest.signing a real built APK produces a Play and device installable
+  signature` — **preskače se** (JUnit `Assume`) kada `SIGNIFFIA_REAL_APK` nije postavljen.
+  To je svesno: test ne sme da izgleda uspešan ako ništa nije proverio. Postavi
+  `SIGNIFFIA_REAL_APK` na stvarni APK da bi se izvršio.
 
 ## Nezavisna provera (interoperabilnost)
 
-1. **Objavljeni release APK** (`app-release.apk`, potpisan projektnim release ključem)
-   proveren zvaničnim `apksigner`:
+1. **Objavljeni release APK** proveren zvaničnim `apksigner`: v1/v2/v3 ispravni.
+2. **APK potpisan Signiffia engine-om** proveren zvaničnim `apksigner` (`--min-sdk-version 18`).
+3. **AAB potpisan engine-om** proveren JDK `jarsigner -verify` (bez APK Signing Block-a).
+4. **Manifest objavljenog APK-a**: `aapt2 dump badging` — 0 `uses-permission`, paket
+   `dev.signiffia`, minSdk 26, targetSdk 36.
 
-   ```
-   Verifies
-   Verified using v1 scheme (JAR signing): false   (nije potreban za minSdk 26)
-   Verified using v2 scheme (APK Signature Scheme v2): true
-   Verified using v3 scheme (APK Signature Scheme v3): true
-   ```
-
-   Sa `--min-sdk-version 18` apksigner potvrđuje i v1 potpis: `true`.
-
-2. **APK potpisan Signiffia engine-om** (test `signing a real built APK...`): uzet je
-   stvarni Gradle release APK (9,6 MB, 153 fajla), potpisan kroz `SigningEngine` u testu,
-   a zatim proveren zvaničnim `apksigner`:
-
-   ```
-   Verifies
-   Verified using v1 scheme (JAR signing): true   (--min-sdk-version 18)
-   Verified using v2 scheme (APK Signature Scheme v2): true
-   Verified using v3 scheme (APK Signature Scheme v3): true
-   Signer #1 certificate DN: C=RS, O=Signiffia, CN=Signiffia Test
-   ```
-
-3. **AAB potpisan engine-om** proveren JDK `jarsigner -verify`: `jar verified.`
-   (`META-INF/MANIFEST.MF` + `.SF` + `.RSA`), bez APK Signing Block-a.
-
-4. **Manifest objavljenog APK-a**: `aapt2 dump badging` — 0 `uses-permission` zapisa,
-   paket `dev.signiffia`, verzija `1.0.0` (versionCode 1), minSdk 26, targetSdk 36.
-
-## Šta nije testirano u ovom okruženju
+## Šta NIJE testirano u ovom okruženju
 
 - **Instalacija i rad interfejsa na fizičkom uređaju / emulatoru.** Okruženje nema
-  `adb` niti `pm` pristup, pa UI nije pokrenut na uređaju. APK je proveren alatima
-  (`apksigner`, `aapt2`), ali prvo pokretanje treba potvrditi na telefonu.
-- **Upload AAB-a na Google Play** (nije izvedeno; potreban je Play nalog).
-- **Potpisivanje APK-a iz Flutter/React Native projekata** — engine je isti apksig koji
-  koriste svi alati, a test sa stvarnim Gradle APK-om pokriva realan format APK-a.
-- **Rad bez interneta na uređaju** — aplikacija nema INTERNET dozvolu, pa mrežni pristup
-  nije moguć na nivou Android manifesta; to je provereno kroz `aapt2 dump badging`.
+  `adb` niti `pm`, pa UI nije pokrenut na uređaju. U nastavku je ručna provera za telefon.
+- **Upload AAB-a na Google Play** (potreban Play nalog).
+- **bundletool validacija AAB-a.** Signiffia namerno ne uključuje bundletool: JAR (v1)
+  potpis je format koji Play prihvata za upload, a dodavanje bundletool-a bi značajno
+  povećalo APK bez koristi za sam čin potpisivanja.
+
+## Ručna provera na Android telefonu (checklist)
+
+Izvrši na pravom uređaju (Android 8.0+):
+
+1. Instaliraj `app-debug.apk` (ili release) i pokreni aplikaciju.
+2. **Ključevi → Novi ključ** — napravi RSA 2048 i EC P-256 ključ; proveri da se pojavljuju
+   u listi i da je fingerprint prikazan.
+3. **Ključevi → Uvezi keystore** — uvezi postojeći `.jks`/`.p12`; proveri multi-alias
+   keystore sa različitim lozinkama po alijasu.
+4. **Potpiši APK ili AAB** — izaberi APK, potpiši (v1+v2+v3), sačuvaj; instaliraj
+   potpisani APK i pokreni ga.
+5. **Potpiši APK ili AAB** sa `.aab` — proveri da je rezultat JAR (v1) potpisan.
+6. **Proveri potpis** — proveri potpisani APK i namerno izmenjen APK (mora prijaviti grešku).
+7. **Uporedi potpise** — uporedi dve verzije istog APK-a (isti ključ) i APK potpisan
+   drugim ključem (mora upozoriti).
+8. **Backup i vraćanje** — napravi `.sgnbak`, deinstaliraj aplikaciju, ponovo instaliraj,
+   vrati backup i proveri da su ključevi dostupni i upotrebljivi.
+9. **Veliki fajl** — potpiši APK od nekoliko stotina MB i proveri da aplikacija ne padne
+   (prikazuje jasnu grešku ako je fajl prevelik).
+10. **Offline** — isključi Wi-Fi i mobilne podatke; aplikacija mora raditi identično.
+
+## Release build provera
+
+- `assembleRelease` **bez** kredencijala mora **pasti** sa jasnom greškom (nikada ne
+  potpisuje debug ključem).
+- `assembleRelease` **sa** kredencijalima pravi release APK; proveri zvaničnim
+  `apksigner verify --print-certs` da potpisnik NIJE debug ključ (`CN=Android Debug`).

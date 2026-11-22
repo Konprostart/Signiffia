@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.security.SecureRandom
 import java.util.Base64
@@ -63,6 +64,12 @@ object BackupManager {
     private const val TAG_BITS = 128
     private const val ITERATIONS = 210_000
     private const val MANIFEST = "backup.properties"
+
+    // Defensive bounds so a malicious or corrupt file can never exhaust memory or disk.
+    private const val MAX_BACKUP_BYTES = 512L * 1024 * 1024 // 512 MiB on-disk backup file
+    private const val MAX_ZIP_ENTRIES = 5_000
+    private const val MAX_ZIP_ENTRY_BYTES = 64 * 1024 * 1024 // 64 MiB per keystore member
+    private val SAFE_ID = Regex("[A-Za-z0-9_-]{1,64}")
 
     const val MIN_PASSPHRASE_LENGTH = 8
 
@@ -127,6 +134,9 @@ object BackupManager {
         tempDir: File? = null,
     ): BackupSummary {
         if (!file.exists()) throw BackupException("Backup fajl ne postoji.")
+        if (file.length() > MAX_BACKUP_BYTES) {
+            throw BackupException("Backup fajl je prevelik (više od ${MAX_BACKUP_BYTES / (1024 * 1024)} MB).")
+        }
         val bytes = file.readBytes()
         if (bytes.size < MAGIC.size + 1 + SALT_BYTES + 4 + IV_BYTES + 16) {
             throw BackupException("Fajl je previše mali da bi bio Signiffia backup.")
@@ -254,18 +264,49 @@ object BackupManager {
         try {
             ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
                 var entry = zip.nextEntry
+                var count = 0
                 while (entry != null) {
+                    count++
+                    if (count > MAX_ZIP_ENTRIES) {
+                        throw BackupException("Backup sadrži previše stavki (više od $MAX_ZIP_ENTRIES).")
+                    }
                     val name = entry.name
+                    requireSafeMemberName(name)
                     if (!name.endsWith("/") && (name.startsWith("keystores/") || name == MANIFEST)) {
-                        result[name] = zip.readBytes()
+                        result[name] = readEntryBounded(zip, MAX_ZIP_ENTRY_BYTES)
                     }
                     entry = zip.nextEntry
                 }
             }
+        } catch (e: BackupException) {
+            throw e
         } catch (e: Throwable) {
             throw BackupException("Sadržaj backup-a je oštećen: ${e.message}", e)
         }
         return result
+    }
+
+    private fun requireSafeMemberName(name: String) {
+        if (name.isBlank()) throw BackupException("Backup sadrži prazno ime stavke.")
+        if (name.startsWith("/") || name.contains("\\") || name.split('/').any { it == ".." }) {
+            throw BackupException("Backup sadrži sumnjivu putanju: $name")
+        }
+    }
+
+    private fun readEntryBounded(input: InputStream, limit: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(16 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            total += read
+            if (total > limit) {
+                throw BackupException("Stavka backup-a prelazi dozvoljenu veličinu ($limit bajtova).")
+            }
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
     }
 
     private fun parseManifest(bytes: ByteArray): Manifest {
@@ -286,11 +327,23 @@ object BackupManager {
             fun required(name: String): String = properties.getProperty(p + name)
                 ?: throw BackupException("Manifest nema polje $name za ključ #$index.")
             val aliases = unb64(required("aliases")).split("\u0000").filter { it.isNotEmpty() }
+            val id = required("id")
+            val storeType = required("type")
+            val fileName = required("file")
+            if (!id.matches(SAFE_ID)) {
+                throw BackupException("Backup sadrži neispravan ID ključa (#$index).")
+            }
+            if (storeType != KeystoreTools.TYPE_JKS && storeType != KeystoreTools.TYPE_PKCS12) {
+                throw BackupException("Backup sadrži nepodržan tip keystore-a (#$index).")
+            }
+            if (fileName != "keystores/$id.keystore") {
+                throw BackupException("Backup sadrži neispravnu putanju keystore-a (#$index).")
+            }
             ManifestKey(
-                id = required("id"),
+                id = id,
                 displayName = required("name"),
-                storeType = required("type"),
-                fileName = required("file"),
+                storeType = storeType,
+                fileName = fileName,
                 storePassword = unb64(required("storePassword")),
                 primaryAlias = unb64(required("primary")),
                 aliases = aliases,

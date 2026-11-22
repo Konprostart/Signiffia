@@ -57,6 +57,7 @@ fun KeyDetailScreen(
     var showDelete by remember { mutableStateOf(false) }
     var showUnlock by remember { mutableStateOf(false) }
     var unlockPassword by remember { mutableStateOf("") }
+    var unlockAliasPasswords by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
     LaunchedEffect(keyId, record?.encStorePassword) {
         vm.aliasDetails(keyId).fold(
@@ -203,14 +204,13 @@ fun KeyDetailScreen(
 
     if (showUnlock) {
         AlertDialog(
-            onDismissRequest = { showUnlock = false; unlockPassword = "" },
+            onDismissRequest = { showUnlock = false; unlockPassword = ""; unlockAliasPasswords = emptyMap() },
             title = { Text("Ponovno otključavanje") },
             text = {
                 Column {
                     Text(
-                        "Android Keystore ključ koji je čuvao lozinku više nije dostupan " +
-                            "(npr. nakon reinstalacije). Unesi lozinku ovog keystore-a da ga ponovo otključaš. " +
-                            "Ključ se neće promeniti.",
+                        "Android Keystore ključ koji je čuvao lozinku više nije dostupan. " +
+                            "Unesi lozinku ovog keystore-a da ga ponovo otključaš. Ključ se neće promeniti.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Spacer(Modifier.height(10.dp))
@@ -221,16 +221,44 @@ fun KeyDetailScreen(
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                     )
+                    if (record.isMultiAlias) {
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "Lozinke pojedinačnih alijasa (prazno = ista kao lozinka keystore-a):",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        record.aliases.forEach { alias ->
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = unlockAliasPasswords[alias] ?: "",
+                                onValueChange = { unlockAliasPasswords = unlockAliasPasswords + (alias to it) },
+                                label = { Text("Lozinka za \"$alias\"") },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    vm.unlockKey(record.id, unlockPassword.toCharArray())
+                    val keyPasswords = record.aliases.associate { alias ->
+                        val entered = unlockAliasPasswords[alias]?.trim().orEmpty()
+                        alias to (if (entered.isEmpty()) unlockPassword.toCharArray() else entered.toCharArray())
+                    }
+                    vm.unlockKey(record.id, unlockPassword.toCharArray(), keyPasswords)
                     showUnlock = false
                     unlockPassword = ""
+                    unlockAliasPasswords = emptyMap()
                 }) { Text("Otključaj") }
             },
-            dismissButton = { TextButton(onClick = { showUnlock = false }) { Text("Otkaži") } },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnlock = false
+                    unlockPassword = ""
+                    unlockAliasPasswords = emptyMap()
+                }) { Text("Otkaži") }
+            },
         )
     }
 

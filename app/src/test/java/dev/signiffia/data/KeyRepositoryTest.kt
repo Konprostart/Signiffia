@@ -7,6 +7,8 @@ import dev.signiffia.core.KeystoreException
 import dev.signiffia.core.KeystoreTools
 import dev.signiffia.core.SchemeOptions
 import dev.signiffia.core.SigningEngine
+import dev.signiffia.core.SigningIdentity
+import dev.signiffia.core.JksKeyStoreSpi
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -16,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
+import java.io.FileOutputStream
+import java.security.KeyStore
 
 class KeyRepositoryTest {
 
@@ -220,5 +224,53 @@ class KeyRepositoryTest {
         assertEquals("persisted", loaded!!.displayName)
         assertNotNull(reopened.resolveIdentity(loaded))
         assertNull(reopened.get("does-not-exist"))
+    }
+
+    @Test
+    fun `multi-alias keystore with a different password per alias is imported and usable`() {
+        val dir = Fixtures.tempDir("repo-multi-alias")
+        val (_, idA) = Fixtures.identity(dir, alias = "alias-a", password = "key-pass-a-1")
+        val (_, idB) = Fixtures.identity(dir, alias = "alias-b", password = "key-pass-b-1")
+
+        // Build a real JKS with two private-key entries protected by different key passwords.
+        KeystoreTools.ensureProviders()
+        val storePassword = "store-password-1"
+        val jks = KeyStore.getInstance(KeystoreTools.TYPE_JKS, JksKeyStoreSpi.PROVIDER_NAME)
+        jks.load(null, storePassword.toCharArray())
+        jks.setKeyEntry("alias-a", idA.privateKey, "key-pass-a-1".toCharArray(), arrayOf(idA.certificate))
+        jks.setKeyEntry("alias-b", idB.privateKey, "key-pass-b-1".toCharArray(), arrayOf(idB.certificate))
+        val jksFile = File(dir, "multi.jks")
+        FileOutputStream(jksFile).use { jks.store(it, storePassword.toCharArray()) }
+
+        val (repo, _) = repository()
+        val record = repo.importKeystore(
+            KeyImportRequest(
+                sourceFile = jksFile,
+                displayName = "multi alias",
+                storePassword = storePassword.toCharArray(),
+                keyPasswords = mapOf(
+                    "alias-a" to "key-pass-a-1".toCharArray(),
+                    "alias-b" to "key-pass-b-1".toCharArray(),
+                ),
+            )
+        )
+
+        assertEquals(listOf("alias-a", "alias-b"), record.aliases)
+        val identityA = repo.resolveIdentity(record, "alias-a")
+        val identityB = repo.resolveIdentity(record, "alias-b")
+        assertEquals(CertUtils.sha256Fingerprint(idA.certificate), CertUtils.sha256Fingerprint(identityA.certificate))
+        assertEquals(CertUtils.sha256Fingerprint(idB.certificate), CertUtils.sha256Fingerprint(identityB.certificate))
+
+        // Both aliases must be able to actually sign.
+        for ((alias, identity) in listOf("alias-a" to identityA, "alias-b" to identityB)) {
+            val outcome = SigningEngine.signApk(
+                Fixtures.apkFile(dir, "$alias.apk"),
+                File(dir, "$alias-signed.apk"),
+                SigningIdentity(alias, identity.privateKey, identity.certificates),
+                SchemeOptions(),
+                minSdk = 26,
+            )
+            assertTrue("$alias must sign", outcome.report.verified)
+        }
     }
 }

@@ -72,8 +72,8 @@ fun AboutScreen() {
         SectionCard(title = "Potpisne šeme") {
             InfoRow("v1 (JAR)", "Android 6 i stariji, i AAB")
             InfoRow("v2", "Android 7+, provera celog APK-a")
-            InfoRow("v3", "Android 9+, rotacija ključa")
-            InfoRow("v3.1", "Android 13+, rotacija preko lineage-a")
+            InfoRow("v3", "Android 9+, standardna potpisna šema")
+            InfoRow("v3.1", "Android 13+, rotacija ključa — Signiffia je proverava, ali ne pravi")
             InfoRow("v4", "inkrementalna instalacija (.idsig)")
         }
 
@@ -110,7 +110,9 @@ fun AboutScreen() {
                 "• Split arhive (APKS/XAPK/APKM) se otvaraju kao arhive; potpisuju se pojedinačni APK delovi.\n" +
                     "• Signiffia ne menja AndroidManifest, ne optimizuje APK i ne potpisuje obfuscated native kod posebno.\n" +
                     "• APK koji je već potpisan drugim ključem potpisuje se iznova tvojim ključem (stari potpis se uklanja).\n" +
-                    "• Zipalign se čuva onakav kakav je u ulaznom APK-u; Signiffia ne menja poravnanje.",
+                    "• Zipalign se čuva onakav kakav je u ulaznom APK-u; Signiffia ne menja poravnanje.\n" +
+                    "• Rotacija ključa (v3.1 / proof-of-rotation) se proverava, ali se ne generiše.\n" +
+                    "• AAB se proverava JAR proverom; bundletool validacija se ne vrši.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }

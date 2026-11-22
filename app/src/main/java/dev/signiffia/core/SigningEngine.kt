@@ -84,6 +84,27 @@ data class SignOutcome(
     val warnings: List<String>,
 )
 
+/** Compares the signing identities (SHA-256 fingerprints) of two APK/AAB versions. */
+data class SignatureComparison(
+    val oldFingerprints: Set<String>,
+    val newFingerprints: Set<String>,
+) {
+    val commonSigners: Set<String> get() = oldFingerprints intersect newFingerprints
+    val sameSigner: Boolean
+        get() = oldFingerprints.isNotEmpty() && oldFingerprints == newFingerprints
+    val signerChanged: Boolean
+        get() = oldFingerprints.isNotEmpty() && newFingerprints.isNotEmpty() &&
+            oldFingerprints != newFingerprints
+
+    /**
+     * An upgrade keeps installing only if the new version is signed with at least one
+     * of the old signing certificates (Android requires the same signer across updates).
+     */
+    val upgradeCompatible: Boolean
+        get() = oldFingerprints.isNotEmpty() && newFingerprints.isNotEmpty() &&
+            commonSigners.isNotEmpty()
+}
+
 /**
  * APK signing and verification. All cryptographic work is delegated to the official
  * Android `apksig` library — no custom signature algorithm lives here.
@@ -318,7 +339,13 @@ object SigningEngine {
                     val entry = entries.nextElement()
                     if (entry.isDirectory || entry.name.startsWith("META-INF/")) continue
                     checkedEntries++
-                    jar.getInputStream(entry).use { input -> input.readBytes() }
+                    // Stream the entry to a discard buffer: reading it is what makes the
+                    // JDK JAR verifier check the digest, but we must not hold the whole
+                    // (possibly huge) entry in memory.
+                    jar.getInputStream(entry).use { input ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (input.read(buffer) != -1) { /* verify digests */ }
+                    }
                     val certs = entry.certificates
                     if (certs == null || certs.isEmpty()) {
                         unsignedEntries++
@@ -361,6 +388,13 @@ object SigningEngine {
             notes = listOf("Provereno $checkedEntries fajlova u arhivi."),
         )
     }
+
+    /** Compares the signer identities of two verification reports. */
+    fun compareSigners(old: VerificationReport, new: VerificationReport): SignatureComparison =
+        SignatureComparison(
+            oldFingerprints = old.signers.map { it.sha256 }.toSet(),
+            newFingerprints = new.signers.map { it.sha256 }.toSet(),
+        )
 
     /** Checks a v1 (JAR) signature in isolation, for APKs that newer schemes shadow. */
     private fun probeV1Signature(file: File, requestedMinSdk: Int): Boolean = runCatching {

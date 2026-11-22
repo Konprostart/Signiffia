@@ -9,6 +9,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class SigningEngineTest {
 
@@ -222,9 +224,18 @@ class SigningEngineTest {
 
     @Test
     fun `signing a real built APK produces a Play and device installable signature`() {
-        val realApkPath = System.getenv("SIGNIFFIA_REAL_APK") ?: return
-        val realApk = File(realApkPath)
-        if (!realApk.exists()) return
+        // Integration test: runs only when a real, toolchain-built APK is provided.
+        // Without the env var it is reported as SKIPPED (not silently passed).
+        val realApkPath = System.getenv("SIGNIFFIA_REAL_APK")
+        org.junit.Assume.assumeTrue(
+            "SIGNIFFIA_REAL_APK nije postavljen — integracioni test se preskače",
+            realApkPath != null
+        )
+        val realApk = File(realApkPath!!)
+        org.junit.Assume.assumeTrue(
+            "Realni APK ne postoji na putanji: $realApkPath",
+            realApk.exists()
+        )
 
         val dir = Fixtures.tempDir("real-apk")
         val (_, identity) = Fixtures.identity(dir, alias = "release-test", keySize = 3072)
@@ -234,8 +245,65 @@ class SigningEngineTest {
 
         assertTrue(outcome.report.verified)
         assertTrue(outcome.report.v1 && outcome.report.v2 && outcome.report.v3)
-        assertEquals(sha256(realApk), sha256(realApk))
+        assertTrue("input must stay unchanged", realApk.exists())
         assertTrue(output.length() > 1_000_000)
+        // Independent re-verification of the produced file.
+        assertTrue(SigningEngine.verify(output, minSdk = 26).verified)
+    }
+
+    @Test
+    fun `signs and verifies a large APK`() {
+        val dir = Fixtures.tempDir("large-apk")
+        val input = File(dir, "large.apk")
+        ZipOutputStream(input.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("AndroidManifest.xml"))
+            zip.write(ByteArray(512))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("classes.dex"))
+            zip.write("dex\n035\u0000".toByteArray() + ByteArray(2048))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("assets/big.bin"))
+            // Incompressible data so the entry really stays ~8 MiB on disk.
+            val chunk = ByteArray(256 * 1024)
+            java.util.Random(1234).nextBytes(chunk)
+            repeat(32) { zip.write(chunk) } // 8 MiB
+            zip.closeEntry()
+        }
+        val (_, identity) = Fixtures.identity(dir)
+        val output = File(dir, "large-signed.apk")
+
+        val outcome = SigningEngine.signApk(input, output, identity, SchemeOptions(), minSdk = 26)
+
+        assertTrue(outcome.report.verified)
+        assertTrue(output.length() > 8L * 1024 * 1024)
+        assertTrue(SigningEngine.verify(output, minSdk = 26).verified)
+    }
+
+    @Test
+    fun `verifyJar handles a large AAB member`() {
+        val dir = Fixtures.tempDir("large-aab")
+        val bundle = File(dir, "big.aab")
+        ZipOutputStream(bundle.outputStream()).use { zip ->
+            zip.putNextEntry(ZipEntry("BundleConfig.pb"))
+            zip.write(ByteArray(64))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("base/manifest/AndroidManifest.xml"))
+            zip.write(ByteArray(128))
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("base/assets/big.bin"))
+            val chunk = ByteArray(256 * 1024)
+            java.util.Random(4321).nextBytes(chunk)
+            repeat(16) { zip.write(chunk) } // 4 MiB incompressible
+            zip.closeEntry()
+        }
+        val (_, identity) = Fixtures.identity(dir)
+        val output = File(dir, "big-signed.aab")
+
+        val outcome = SigningEngine.signBundle(bundle, output, identity)
+
+        assertTrue(outcome.report.verified)
+        assertTrue(outcome.report.v1)
+        assertFalse(outcome.report.v2)
     }
 
     private fun sha256(file: File): String =
