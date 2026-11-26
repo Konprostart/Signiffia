@@ -28,6 +28,11 @@ import dev.signiffia.data.KeyImportRequest
 import dev.signiffia.data.KeyRecord
 import dev.signiffia.data.KeyRepository
 import dev.signiffia.data.VaultLockedException
+import dev.signiffia.account.AccountSession
+import dev.signiffia.account.AccountState
+import dev.signiffia.account.AndroidDeviceKey
+import dev.signiffia.account.MultiDeviceManager
+import dev.signiffia.sync.DeviceInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -207,6 +212,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _vaultLockedKeyId = MutableStateFlow<String?>(null)
     val vaultLockedKeyId: StateFlow<String?> = _vaultLockedKeyId.asStateFlow()
+
+    private val accountSession = AccountSession(application)
+    private val multiDevice = MultiDeviceManager(
+        repository = repository,
+        deviceKey = AndroidDeviceKey.create(application),
+        session = accountSession,
+    )
+
+    private val _accountState = MutableStateFlow(accountSession.load())
+    val accountState: StateFlow<AccountState> = _accountState.asStateFlow()
+
+    private val _devices = MutableStateFlow<List<DeviceInfo>>(emptyList())
+    val devices: StateFlow<List<DeviceInfo>> = _devices.asStateFlow()
+
+    private val _recoveryMnemonic = MutableStateFlow<String?>(null)
+    val recoveryMnemonic: StateFlow<String?> = _recoveryMnemonic.asStateFlow()
 
     private var pendingIdsig: File? = null
 
@@ -819,6 +840,144 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun clearRestorePreview() {
         _backupState.update { it.copy(restorePreview = null, restoreError = null) }
     }
+
+    // -------------------------------------------------------------- account
+
+    fun registerAccount(username: String, password: CharArray, serverUrl: String, deviceName: String) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Kreiram nalog…")
+            try {
+                val state = withContext(Dispatchers.IO) {
+                    multiDevice.register(username, password, serverUrl.trim(), deviceName.ifBlank { defaultDeviceName() })
+                }
+                _accountState.value = state
+                _message.value = UiMessage("Nalog je kreiran i uređaj je prijavljen.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun loginAccount(username: String, password: CharArray, serverUrl: String, deviceName: String) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Prijavljujem se…")
+            try {
+                val state = withContext(Dispatchers.IO) {
+                    multiDevice.login(username, password, serverUrl.trim(), deviceName.ifBlank { defaultDeviceName() })
+                }
+                _accountState.value = state
+                _message.value = UiMessage("Prijava uspešna.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun logoutAccount() {
+        multiDevice.logout()
+        _accountState.value = accountSession.load()
+        _devices.value = emptyList()
+        _message.value = UiMessage("Odjavljen si sa naloga.")
+    }
+
+    fun setupRecovery() {
+        viewModelScope.launch {
+            _busy.value = BusyState("Pravim ključ za oporavak…")
+            try {
+                val mnemonic = withContext(Dispatchers.IO) { multiDevice.setupRecovery() }
+                _recoveryMnemonic.value = mnemonic
+                _accountState.value = accountSession.load()
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun clearRecoveryMnemonic() {
+        _recoveryMnemonic.value = null
+    }
+
+    fun syncNow() {
+        viewModelScope.launch {
+            _busy.value = BusyState("Sinhronizujem…")
+            try {
+                withContext(Dispatchers.IO) { multiDevice.syncNow() }
+                _accountState.value = accountSession.load()
+                _message.value = UiMessage("Trezor je šifrovan i sinhronizovan.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun downloadAndRestore() {
+        viewModelScope.launch {
+            _busy.value = BusyState("Preuzimam trezor…")
+            try {
+                withContext(Dispatchers.IO) { multiDevice.downloadAndRestore() }
+                _accountState.value = accountSession.load()
+                refreshKeys()
+                _message.value = UiMessage("Trezor je preuzet i ključevi su vraćeni.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun recoverWithRecoveryKey(mnemonic: String) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Vraćam trezor…")
+            try {
+                withContext(Dispatchers.IO) { multiDevice.recoverWithRecoveryKey(mnemonic.trim()) }
+                _accountState.value = accountSession.load()
+                refreshKeys()
+                _message.value = UiMessage("Trezor je vraćen. Tvoji ključevi su dostupni.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    fun listDevices() {
+        viewModelScope.launch {
+            try {
+                _devices.value = withContext(Dispatchers.IO) { multiDevice.listDevices() }
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            }
+        }
+    }
+
+    fun revokeDevice(deviceId: String) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Povlačim uređaj…")
+            try {
+                withContext(Dispatchers.IO) { multiDevice.revokeDevice(deviceId) }
+                _accountState.value = accountSession.load()
+                _devices.value = withContext(Dispatchers.IO) { multiDevice.listDevices() }
+                _message.value = UiMessage("Uređaj je povučen.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    private fun defaultDeviceName(): String =
+        "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim().ifBlank { "Android" }
 
     // -------------------------------------------------------------- internals
 

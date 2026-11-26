@@ -3,6 +3,48 @@
 Sve značajne promene u ovom projektu. Format prati [Keep a Changelog](https://keepachangelog.com/),
 projekt se pridržava [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — neobjavljeno
+
+### Dodato
+
+- **Multi-device nalog i šifrovana sinhronizacija** (opciona, podrazumevano isključena):
+  - **Šifrovani trezor** — ključevi i lozinke se šifruju AES-256-GCM **Master Vault Key (MVK)**,
+    koji nikada ne napušta uređaj u čistom obliku i nikada ne ide na server.
+  - **Nezavisan ključ za oporavak** — BIP39 (24 reči), validiran prema zvaničnim test
+    vektorima; jedini način oporavka kada su svi uređaji izgubljeni.
+  - **Nalog sa lozinkom** (Argon2id, BouncyCastle) — autentifikacija je strogo odvojena od
+    enkripcije trezora; prijava nikada ne otključava trezor bez ključa za oporavak ili
+    autorizacije uređaja.
+  - **Upravljanje uređajima** — lista, preimenovanje i **povlačenje (revoke)** sa epoch
+    upravljanjem; server prima isključivo šifrovane podatke.
+  - **Potpuno lokalno potpisivanje** — `SigningEngine` i postojeći ključevi/fingerprinti su
+    netaknuti; migracija na trezor ne regeneriše nijedan ključ.
+- JVM testovi za kriptografiju trezora, ključ za oporavak, uparivanje (ECDH), enrollment
+  tokene, sinhronizaciju i migraciju koja čuva fingerprint.
+- Referentni **sync server** (`server/`) sa dokumentacijom za deployment, HTTPS, bazu i
+  oporavak — server je nepoverljiv i čuva samo šifrovane podatke.
+
+### Bezbednost
+
+- Envelope enkripcija: MVK (256-bit) + ključ uređaja (Android Keystore, zahteva svež
+  otisak/PIN) + ključ za oporavak (offline).
+- AES-GCM sa jedinstvenim nonce-ima i AAD vezivanjem verzije + epoche (odbrana od rollback-a
+  i zamene objekata).
+- Enrollment tokeni su jednokratni i kratkoživeći; QR/ručno uparivanje koristi ECDH (P-256)
+  sa out-of-band potvrdom.
+- Nijedna tajna (MVK, ključ za oporavak, privatni ključevi, lozinke) ne ide na server niti u
+  logove.
+- Revoke sprečava buduću sinhronizaciju, ali **ne može** da obriše podatke već preuzete na
+  kompromitovan uređaj (dokumentovano).
+
+### Zavisnosti
+
+- **Nijedna nova biblioteka u aplikaciji.** Vault/nalog/sync koriste postojeći BouncyCastle
+  (Argon2id) i standardni JCA; mrežni klijent koristi `HttpURLConnection`. Referentni server
+  (zaseban projekat) koristi Ktor (Apache-2.0).
+- Nova dozvola: `INTERNET` (normal, bez prompta), korišćena isključivo za opcionu, šifrovanu
+  sinhronizaciju. I dalje nema opasnih dozvola.
+
 ## [1.2.0] — neobjavljeno
 
 ### Dodato

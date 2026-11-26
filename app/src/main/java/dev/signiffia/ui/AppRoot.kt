@@ -46,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.signiffia.ui.screens.AboutScreen
+import dev.signiffia.ui.screens.AccountScreen
 import dev.signiffia.ui.screens.BackupScreen
 import dev.signiffia.ui.screens.CompareScreen
 import dev.signiffia.ui.screens.HomeScreen
@@ -69,6 +70,7 @@ private enum class Route(val title: String) {
     KeyImport("Uvoz keystora"),
     KeyDetail("Detalji ključa"),
     Backup("Backup i vraćanje"),
+    Account("Nalog i sinhronizacija"),
     Security("Zaključavanje"),
     About("O aplikaciji"),
 }
@@ -142,6 +144,7 @@ fun AppRoot(
                     onCompare = { navigate(Route.Compare) },
                     onKeys = { navigate(Route.Keys) },
                     onBackup = { navigate(Route.Backup) },
+                    onAccount = { navigate(Route.Account) },
                     onSecurity = { navigate(Route.Security) },
                     onAbout = { navigate(Route.About) },
                 )
@@ -185,6 +188,7 @@ fun AppRoot(
                     }
                 }
                 Route.Backup -> BackupScreen(vm = vm)
+                Route.Account -> AccountScreen(vm = vm)
                 Route.Security -> SecurityScreen(
                     mode = lockMode,
                     delay = autoLockDelay,

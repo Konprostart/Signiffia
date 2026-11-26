@@ -3,16 +3,19 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-        Signiffia requests NO dangerous permissions: no INTERNET, no storage permissions
-        (SAF grants per-file access), no analytics, no ads.
+        Signiffia requests NO dangerous permissions. No storage permissions (SAF grants
+        per-file access), no analytics, no ads. The biometric permissions are "normal"-level
+        and used solely by the optional app lock.
 
-        The only permissions are the "normal"-level biometric permissions, used solely by
-        the optional app lock (BiometricPrompt). They are auto-granted, cannot access the
-        network or storage, and biometric data never leaves the device.
+        INTERNET is "normal"-level and is used ONLY by the optional, explicitly-enabled
+        encrypted account sync. The app is fully offline by default; without the user opting
+        in and configuring a server, no network call is ever made.
     -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Required by the androidx.biometric backport on Android 8.0/8.1 (API 26-27). -->
     <uses-permission android:name="android.permission.USE_FINGERPRINT" />
+    <!-- Optional encrypted account sync (explicit opt-in). -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
         AndroidX core adds an internal signature permission for dynamic receivers; this app

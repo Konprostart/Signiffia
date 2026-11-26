@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -45,6 +46,7 @@ fun HomeScreen(
     onCompare: () -> Unit,
     onKeys: () -> Unit,
     onBackup: () -> Unit,
+    onAccount: () -> Unit,
     onSecurity: () -> Unit,
     onAbout: () -> Unit,
 ) {
@@ -101,6 +103,13 @@ fun HomeScreen(
         )
         Spacer(Modifier.height(10.dp))
         ActionCard(
+            icon = Icons.Filled.Person,
+            title = "Nalog i sinhronizacija",
+            description = "Isti ključevi na više telefona preko šifrovanog trezora (opciono).",
+            onClick = onAccount,
+        )
+        Spacer(Modifier.height(10.dp))
+        ActionCard(
             icon = Icons.Filled.Settings,
             title = "Zaključavanje",
             description = "PIN, otisak prsta ili lice pri otvaranju aplikacije.",
@@ -115,7 +124,8 @@ fun HomeScreen(
         )
         Spacer(Modifier.height(22.dp))
         Text(
-            "Signiffia radi potpuno offline. Nema INTERNET dozvolu, nalog, reklame ni praćenje.",
+            "Signiffia radi potpuno offline po podrazumevanoj postavci. Sinhronizacija " +
+                "naloga je opciona i šifrovana — nema reklama ni praćenja.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),

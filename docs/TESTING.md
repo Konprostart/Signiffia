@@ -1,4 +1,4 @@
-# Izveštaj o testiranju — Signiffia 1.2.0
+# Izveštaj o testiranju — Signiffia 1.3.0
 
 ## Okruženje
 
@@ -26,7 +26,7 @@ potpisuju APK i AAB, proveravaju potpise apksig-om, prave i otvaraju šifrovane 
 
 ## Rezultat
 
-**57 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
+**117 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
 zahteva stvarni, Gradle-om napravljen APK (`SIGNIFFIA_REAL_APK`); kada se ta promenljiva
 postavi, test se zaista izvršava i proverava potpis. Nijedan test koji ništa ne proverava
 ne izgleda kao „uspešan“.
@@ -40,6 +40,14 @@ ne izgleda kao „uspešan“.
 | `BackupManagerTest` | AES-GCM backup round-trip, pogrešna lozinka, oštećenje, fingerprint mismatch, neispravan fajl |
 | `SplitArchiveTest` | potpisivanje APKS/XAPK/APKM delova, očuvanje metapodataka, greška dela, **path traversal**, **previše stavki** |
 | `LockModelTest` | čista logika zaključavanja: režimi, odgode (0/30 s/1 min/5 min), `shouldRelockOnForeground` granični slučajevi, serijalizacija za perzistenciju |
+| `VaultCryptoTest` | AES-GCM round-trip, jedinstven nonce, tamper, pogrešan ključ, AAD vezivanje, wrap/unwrap, generisanje ključa |
+| `VaultCodecTest` | kodiranje/dekodiranje trezora, očuvanje fingerprinta, multi-alias, oštećen/neispravan zapis, rollback/revoke guard |
+| `VaultMigrationTest` | **end-to-end oporavak**: seal trezor → izgubljeni svi uređaji → ključ za oporavak → restore → isti fingerprint → potpisivanje APK-a |
+| `RecoveryKeyTest` | **BIP39 zvanični test vektori** (entropija→mnemonic→seed), checksum, nepoznata reč, neispravan broj reči, wrap MVK-a |
+| `EnrollmentTokenTest` | jednokratnost, istek, replay odbijanje, jedinstvenost tokena |
+| `EphemeralKeyExchangeTest` | ECDH zajednička tajna, kodiranje ključa, derivacija wrapping ključa, potvrdni kod, wrap MVK-a |
+| `PasswordKdfTest` | Argon2id determinizam, različite lozinke/saltovi, 32-bajtni izlaz, constant-time provera |
+| `SyncClientTest` | wire protokol (registracija, prijava, upload/download trezora, uređaji, revoke, enrollment) sa lažnim transportom |
 
 ## Šta je pokriveno po zahtevima
 
@@ -85,6 +93,14 @@ ne izgleda kao „uspešan“.
 - **bundletool validacija AAB-a.** Signiffia namerno ne uključuje bundletool: JAR (v1)
   potpis je format koji Play prihvata za upload, a dodavanje bundletool-a bi značajno
   povećalo APK bez koristi za sam čin potpisivanja.
+- **Multi-device sinhronizacija na stvarnom serveru i dva uređaja.** Kriptografska logika
+  trezora/oporavka/uparivanja je automatski testirana na JVM-u, ali stvarni tok
+  „prvi telefon → server → drugi telefon" zahteva deployovan sync server i dva fizička
+  uređaja. Referentni server je u `server/` i **nije** deo ovog testnog okruženja.
+- **Passkey (WebAuthn).** Nije uključen u 1.3.0 (zahteva `androidx.credentials` + Play
+  Services + WebAuthn relying party); radi **lozinka naloga** kao fallback.
+- **Biometrijski/PIN ključ uređaja (`AndroidDeviceKey`).** Ključ uređaja koristi
+  `setUserAuthenticationRequired(true)`, što se može potvrditi samo na pravom uređaju.
 
 ## Ručna provera na Android telefonu (checklist)
 
@@ -119,6 +135,14 @@ Izvrši na pravom uređaju (Android 8.0+):
 15. **Uređaj bez ekrana zaključavanja** — ukloni PIN u Android podešavanjima; proveri da je
     aktiviranje zaštite onemogućeno uz uputstvo, i da zaključana aplikacija nudi bezbedan
     oporavak (isključi zaključavanje).
+16. **Nalog i sinhronizacija — prvi uređaj** — kreiraj nalog (HTTPS server), napravi ključ za
+    oporavak (24 reči), sinhronizuj. Proveri da server prima samo šifrovane podatke.
+17. **Nalog i sinhronizacija — novi uređaj** — prijavi se, vrati trezor ključem za oporavak;
+    proveri da su ključevi dostupni sa **istim** fingerprintom i da mogu da potpišu APK.
+18. **Upravljanje uređajima** — lista uređaja, povlačenje izgubljenog uređaja; proveri da
+    povučeni uređaj više ne može da preuzme trezor.
+19. **Pogrešan ključ za oporavak** — unos pogrešnih reči mora biti odbijen bez gubitka
+    postojećih ključeva.
 
 ## Release build provera
 

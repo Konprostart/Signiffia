@@ -10,6 +10,12 @@ samo koncepti iz referentnih projekata.
 > `androidx.biometric:biometric:1.1.0` i `androidx.fragment:fragment:1.6.2`. Bundletool je
 > namerno izostavljen: JAR (v1) potpis AAB-a je format koji Google Play prihvata za upload,
 > a dodavanje bundletool-a bi značajno povećalo APK bez koristi za sam čin potpisivanja.
+>
+> Verzija 1.3.0 **ne dodaje nijednu novu biblioteku u aplikaciju**: trezor/nalog/sync koriste
+> postojeći BouncyCastle (Argon2id) i standardni JCA; mrežni klijent koristi
+> `HttpURLConnection`. BIP39 engleski spisak reči (2048 reči) ugrađen je iz javno dostupnog
+> referentnog spiska (bitcoin/bips). Referentni sync server (`server/`) je zaseban projekat i
+> koristi Ktor (Apache-2.0).
 
 ---
 

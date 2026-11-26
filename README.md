@@ -78,6 +78,17 @@ kriptografije i nema cloud servisa.
 - `FLAG_SECURE` skriva sadržaj u pregledu nedavnih aplikacija i onemogućava slike ekrana
   dok je zaključavanje uključeno.
 
+### Nalog i sinhronizacija (opciono)
+
+- **Jedan lični nalog** za više Android telefona — isti potpisni ključevi i lozinke.
+- **End-to-end šifrovani trezor** (AES-256-GCM, Master Vault Key) — server prima isključivo
+  šifrovane podatke i nikada ne vidi ključeve, lozinke ni glavni ključ.
+- **Nezavisan ključ za oporavak** (BIP39, 24 reči) — jedini način oporavka kad su svi uređaji
+  izgubljeni.
+- **Upravljanje uređajima** — lista i povlačenje (revoke) izgubljenog telefona.
+- Potpuno **offline po podrazumevanoj postavci**: sinhronizacija radi tek kada korisnik
+  eksplicitno podesi server i omogući je. Potpisivanje ostaje uvek lokalno.
+
 ### Ograničenja
 
 - Zipalign se ne menja: Signiffia čuva poravnanje koje APK već ima.
@@ -102,10 +113,11 @@ Potrebno je **Android 8.0 (API 26) ili novije**.
 > Ako imaš instaliranu 1.0.0: prvo sačuvaj ključeve (izvoz `.p12`/`.jks` ili `.sgnbak` backup),
 > zatim deinstaliraj 1.0.0 i sveže instaliraj 1.1.0.
 
-> Aplikacija nema **opasnih** dozvola i nema INTERNET. Fajlove biraš isključivo kroz sistemski
-> birač fajlova, koji daje pristup samo izabranom fajlu. Jedine dozvole su dve `normal`
-> biometrijske dozvole (`USE_BIOMETRIC`, `USE_FINGERPRINT`), korišćene isključivo za opciono
-> zaključavanje otiskom prsta / licem.
+> Aplikacija nema **opasnih** dozvola. Fajlove biraš isključivo kroz sistemski birač fajlova,
+> koji daje pristup samo izabranom fajlu. Dozvole su dve `normal` biometrijske dozvole
+> (`USE_BIOMETRIC`, `USE_FINGERPRINT`) za opciono zaključavanje i `INTERNET` (normal, bez
+> prompta) isključivo za opcionu, šifrovanu sinhronizaciju naloga — po podrazumevanoj postavci
+> se ne uspostavlja nikakva mrežna veza.
 
 ---
 
@@ -171,6 +183,21 @@ Ako uređaj nema podešen PIN/šifru/šaru, aktivne opcije su onemogućene uz up
 podatke — samo traži od Android sistema da potvrdi identitet. Podešavanje se čuva na uređaju
 i preživi ponovno pokretanje.
 
+### Nalog i sinhronizacija
+
+**Nalog i sinhronizacija** na početnom ekranu:
+
+- **Prvi uređaj:** unesi korisničko ime, lozinku naloga i adresu servera (HTTPS), pa
+  **Kreiraj nalog**. Zatim **Napravi ključ za oporavak** i **zapiši 24 reči van uređaja**.
+  Na kraju **Sinhronizuj sada** — ključevi se šifruju i šalju na server.
+- **Novi uređaj:** **Prijavi se** istim podacima, zatim **Vrati trezor** unosom 24 reči
+  ključa za oporavak. Ključevi se preuzimaju šifrovano i vraćaju bez regeneracije.
+- **Upravljanje:** lista uređaja sa opcijom **Povuci** za izgubljeni telefon.
+
+> Server je nepoverljiv: prima samo šifrovane podatke. **Povlačenje uređaja sprečava buduću
+> sinhronizaciju, ali ne briše podatke već preuzete na taj uređaj.** Ključ za oporavak čuvaj
+> offline — to je jedini način oporavka kad izgubiš sve telefone.
+
 ---
 
 ## Bezbednost ključeva
@@ -179,8 +206,12 @@ i preživi ponovno pokretanje.
   aplikacijama.
 - Lozinke keystore-a se **nikada ne čuvaju u običnom tekstu**. Šifrovane su AES-256-GCM
   ključem iz **Android Keystore-a** (hardverski gde uređaj to podržava).
-- Aplikacija **nema INTERNET dozvolu**, tako da ključevi ne mogu da napuste uređaj.
-- Nema logovanja lozinki, nema analitike, nema reklama, nema naloga.
+- Aplikacija je **potpuno offline po podrazumevanoj postavci**. `INTERNET` dozvola se koristi
+  isključivo za opcionu, šifrovanu sinhronizaciju; bez omogućene sinhronizacije ključevi ne
+  napuštaju uređaj.
+- Nema logovanja lozinki, nema analitike, nema reklama.
+- Sinhronizacija šalje isključivo **šifrovane** podatke; server nikada ne dobija privatne
+  ključeve, lozinke ni Master Vault Key.
 - Neispravan ključ se **nikada ne briše niti zamenjuje** automatski. Brisanje je moguće samo
   uz eksplicitnu potvrdu korisnika.
 - Backup je dodatno šifrovan lozinkom koju korisnik izabere (PBKDF2-HMAC-SHA256, 210 000
@@ -231,7 +262,7 @@ Potrebno: JDK 17, Android SDK sa platformom 36 i build-tools 35.0.0, Gradle 8.14
 # debug APK
 ./gradlew :app:assembleDebug
 
-# unit testovi (57 testova)
+# unit testovi (117 testova)
 ./gradlew :app:testDebugUnitTest
 
 # release APK — OBAVEZNO sa eksplicitnim kredencijalima
@@ -260,7 +291,7 @@ Izlaz: `app/build/outputs/apk/debug/app-debug.apk` i
 
 ## Testiranje
 
-**Rezultat poslednjeg izvršavanja: 57 testova, 0 padova, 1 preskočen.** Preskočen je samo
+**Rezultat poslednjeg izvršavanja: 117 testova, 0 padova, 1 preskočen.** Preskočen je samo
 integracioni test sa stvarnim, Gradle-om napravljenim APK-om (`SIGNIFFIA_REAL_APK`); kada se
 ta promenljiva postavi, test se zaista izvršava.
 
@@ -305,11 +336,15 @@ app/src/main/java/dev/signiffia/
 │   ├── SecretCipher.kt      # interfejs za šifrovanje lozinki
 │   ├── AndroidSecretCipher.kt # Android Keystore AES-GCM
 │   └── KeyRepository.kt     # skladište keystore-a + metapodaci
+├── vault/                   # E2EE trezor: AES-GCM, BIP39 ključ za oporavak, codec
+├── account/                 # nalog, ključ uređaja, uparivanje (ECDH), Argon2id KDF
+├── sync/                    # sync klijent, binarni wire protokol, HTTP transport
 └── ui/                      # Compose ekrani, tema, ViewModel
     ├── lock/                # opciono zaključavanje (model, podešavanja, LockScreen)
-    └── screens/             # Home, Sign, Verify, Compare, Keys, Backup, Security, About
+    └── screens/             # Home, Sign, Verify, Compare, Keys, Backup, Account, Security, About
 app/src/test/java/dev/signiffia/   # JVM unit testovi
 docs/                              # dodatna dokumentacija
+server/                            # referentni sync server (zaseban projekat)
 ```
 
 ---
@@ -364,5 +399,7 @@ iscrpljivanje memorije i path traversal:
 
 ## Privatnost
 
-Signiffia ne prikuplja podatke, nema mrežne komunikacije i ne zahteva nalog. Sve što radiš
-ostaje na uređaju.
+Signiffia ne prikuplja podatke, nema reklama ni praćenja. Po podrazumevanoj postavci radi
+potpuno offline. Opciona sinhronizacija naloga šalje isključivo **šifrovane** podatke na
+server koji sam konfigurišeš — server nikada ne dobija tvoje privatne ključeve, lozinke ni
+Master Vault Key.
