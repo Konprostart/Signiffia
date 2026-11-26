@@ -14,8 +14,12 @@ samo koncepti iz referentnih projekata.
 > Verzija 1.3.0 **ne dodaje nijednu novu biblioteku u aplikaciju**: trezor/nalog/sync koriste
 > postojeći BouncyCastle (Argon2id) i standardni JCA; mrežni klijent koristi
 > `HttpURLConnection`. BIP39 engleski spisak reči (2048 reči) ugrađen je iz javno dostupnog
-> referentnog spiska (bitcoin/bips). Referentni sync server (`server/`) je zaseban projekat i
+> referentnog spiska (bitcoin/bips, MIT). Referentni sync server (`server/`) je zaseban projekat i
 > koristi Ktor (Apache-2.0).
+>
+> Verzija 1.3.1 dodaje u **aplikaciju** `androidx.credentials` (Apache-2.0) za opcionu passkey
+> prijavu, a u **server** (zaseban projekat, nije deo APK-a) PostgreSQL JDBC (BSD-2-Clause),
+> HikariCP (Apache-2.0) i webauthn4j (Apache-2.0). Sve licence su permisivne; nema GPL/AGPL/SSPL.
 
 ---
 
@@ -81,6 +85,23 @@ DEALINGS IN THE SOFTWARE.
 - **Licenca:** Apache License 2.0
 - **Izvor:** https://kotlinlang.org/ , https://github.com/Kotlin/kotlinx.coroutines
 - **Kako se koristi:** programski jezik i asinhroni rad.
+
+### AndroidX Credentials (passkey / WebAuthn klijent)
+- **Verzije:** `androidx.credentials:credentials:1.3.0`,
+  `androidx.credentials:credentials-play-services-auth:1.3.0`
+- **Licenca:** Apache License 2.0
+- **Izvor:** https://developer.android.com/jetpack/androidx/releases/credentials
+- **Kako se koristi:** opciona passkey prijava (Android 14+). Passkey je samo autentifikacija;
+  nikada ne dešifruje trezor. Lozinka ostaje uvek dostupan fallback.
+
+### Server biblioteke (zaseban projekat — nisu deo APK-a)
+
+| Biblioteka | Koordinata | Licenca |
+|---|---|---|
+| Ktor | `io.ktor:ktor-server-*:2.3.11` | Apache-2.0 |
+| PostgreSQL JDBC | `org.postgresql:postgresql:42.7.3` | BSD-2-Clause |
+| HikariCP | `com.zaxxer:HikariCP:5.1.0` | Apache-2.0 |
+| WebAuthn4J | `com.webauthn4j:webauthn4j-core:0.31.9.RELEASE` | Apache-2.0 |
 
 ### JUnit 4
 - **Verzija:** 4.13.2 — **Licenca:** Eclipse Public License 1.0

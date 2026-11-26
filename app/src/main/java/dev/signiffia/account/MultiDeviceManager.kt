@@ -32,6 +32,7 @@ class MultiDeviceManager(
     private val repository: KeyRepository,
     private val deviceKey: DeviceKey,
     private val session: AccountSession,
+    private val passkeyClient: PasskeyClient,
     private val transportFactory: (String) -> SyncTransport = { HttpSyncTransport(it) },
 ) {
 
@@ -74,6 +75,48 @@ class MultiDeviceManager(
     }
 
     fun logout() = session.clear()
+
+    // ------------------------------------------------------------- passkey
+
+    /**
+     * Sign-in with a passkey. Returns the new [AccountState] on success, or null when the
+     * account has no passkey or the ceremony fails (the caller then falls back to password).
+     * A passkey login issues a session token but never decrypts the vault — that still needs
+     * the recovery key or the device key.
+     */
+    suspend fun passkeyLogin(username: String, serverUrl: String, deviceName: String): AccountState? {
+        val client = SyncClient(transportFactory(serverUrl))
+        val options = client.webauthnAuthBegin(username) ?: return null
+        val responseJson = passkeyClient.getPasskey(options)
+        val info = client.webauthnAuthComplete(responseJson) ?: return null
+        val previous = session.load()
+        val state = AccountState(
+            userId = info.userId,
+            sessionToken = info.sessionToken,
+            deviceId = info.deviceId,
+            deviceName = deviceName.ifBlank { previous.deviceName },
+            serverUrl = serverUrl,
+            accountSalt = previous.accountSalt,
+            wrappedMvkNonce = previous.wrappedMvkNonce,
+            wrappedMvkCiphertext = previous.wrappedMvkCiphertext,
+            wrappedMvkRecoveryNonce = previous.wrappedMvkRecoveryNonce,
+            wrappedMvkRecoveryCiphertext = previous.wrappedMvkRecoveryCiphertext,
+            vaultVersion = previous.vaultVersion,
+            epoch = previous.epoch,
+        )
+        session.save(state)
+        return state
+    }
+
+    /** Registers a passkey for the currently authenticated account. */
+    suspend fun registerPasskey() {
+        val state = session.load()
+        require(state.isLoggedIn) { "Najpre se prijavi na nalog." }
+        val client = SyncClient(transportFactory(state.serverUrl))
+        val options = client.webauthnRegisterBegin(toSessionInfo(state))
+        val responseJson = passkeyClient.createPasskey(options)
+        client.webauthnRegisterComplete(toSessionInfo(state), responseJson)
+    }
 
     // ------------------------------------------------------------- recovery
 
@@ -129,15 +172,23 @@ class MultiDeviceManager(
 
     // ------------------------------------------------------------- sync
 
-    /** Uploads the current keys to the server as an encrypted vault object. */
+    /**
+     * Uploads the current keys to the server as an encrypted vault object.
+     *
+     * The server is authoritative for both the vault version and the revocation epoch, so the
+     * client fetches them first and seals with `version+1` at the *current* epoch. This
+     * prevents a stale-epoch upload (which the server would reject) and guarantees the AAD
+     * bound into the ciphertext always matches the version/epoch the server records.
+     */
     suspend fun syncNow() {
         val state = session.load()
         require(state.isLoggedIn) { "Najpre se prijavi na nalog." }
+        val client = SyncClient(transportFactory(state.serverUrl))
+        val meta = client.fetchVaultMeta(toSessionInfo(state))
         val mvk = deviceKey.unwrapMvk(state.wrappedMvk() ?: throw IllegalStateException("Nema ključa trezora."))
         val entries = repository.backupEntries()
-        val vaultVersion = state.vaultVersion + 1
-        val epoch = state.epoch
-        val sealed = VaultService.seal(entries, mvk, state.deviceId, vaultVersion, epoch)
+        val vaultVersion = meta.vaultVersion + 1
+        val sealed = VaultService.seal(entries, mvk, state.deviceId, vaultVersion, meta.epoch)
         val snapshot = VaultSnapshot(
             vaultVersion = sealed.manifest.vaultVersion,
             epoch = sealed.manifest.epoch,
@@ -149,8 +200,8 @@ class MultiDeviceManager(
             wrappedMvkRecovery = state.wrappedMvkRecovery()?.toBytes()
                 ?: throw IllegalStateException("Nema recovery ključa; postavi ga pre sinhronizacije."),
         )
-        SyncClient(transportFactory(state.serverUrl)).uploadVault(toSessionInfo(state), snapshot)
-        session.save(state.copy(vaultVersion = vaultVersion))
+        client.uploadVault(toSessionInfo(state), snapshot)
+        session.save(state.copy(vaultVersion = vaultVersion, epoch = meta.epoch))
     }
 
     /** Downloads the vault and restores the keys (new device with an already-unwrapped MVK). */

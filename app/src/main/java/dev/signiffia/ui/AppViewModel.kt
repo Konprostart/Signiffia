@@ -31,6 +31,7 @@ import dev.signiffia.data.VaultLockedException
 import dev.signiffia.account.AccountSession
 import dev.signiffia.account.AccountState
 import dev.signiffia.account.AndroidDeviceKey
+import dev.signiffia.account.AndroidPasskeyClient
 import dev.signiffia.account.MultiDeviceManager
 import dev.signiffia.sync.DeviceInfo
 import kotlinx.coroutines.Dispatchers
@@ -214,10 +215,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val vaultLockedKeyId: StateFlow<String?> = _vaultLockedKeyId.asStateFlow()
 
     private val accountSession = AccountSession(application)
+    private val passkeyClient = AndroidPasskeyClient(application)
     private val multiDevice = MultiDeviceManager(
         repository = repository,
         deviceKey = AndroidDeviceKey.create(application),
         session = accountSession,
+        passkeyClient = passkeyClient,
     )
 
     private val _accountState = MutableStateFlow(accountSession.load())
@@ -228,6 +231,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _recoveryMnemonic = MutableStateFlow<String?>(null)
     val recoveryMnemonic: StateFlow<String?> = _recoveryMnemonic.asStateFlow()
+
+    /** True when the platform can offer passkey sign-in (Android 14+). */
+    val passkeySupported: Boolean get() = passkeyClient.isSupported
 
     private var pendingIdsig: File? = null
 
@@ -869,6 +875,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 _accountState.value = state
                 _message.value = UiMessage("Prijava uspešna.")
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    /** Sign-in with a passkey (falls back to password on failure or when unsupported). */
+    fun passkeyLogin(username: String, serverUrl: String, deviceName: String) {
+        viewModelScope.launch {
+            _busy.value = BusyState("Prijavljujem se passkey-jem…")
+            try {
+                val state = withContext(Dispatchers.IO) {
+                    multiDevice.passkeyLogin(username.trim(), serverUrl.trim(), deviceName.ifBlank { defaultDeviceName() })
+                }
+                if (state == null) {
+                    _message.value = UiMessage("Passkey nije dostupan za ovaj nalog. Prijavi se lozinkom.", isError = true)
+                } else {
+                    _accountState.value = state
+                    _message.value = UiMessage("Prijava passkey-jem uspešna.")
+                }
+            } catch (t: Throwable) {
+                _message.value = UiMessage(t.friendlyMessage(), isError = true)
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    /** Registers a passkey for the currently authenticated account. */
+    fun registerPasskey() {
+        viewModelScope.launch {
+            _busy.value = BusyState("Registrujem passkey…")
+            try {
+                withContext(Dispatchers.IO) { multiDevice.registerPasskey() }
+                _message.value = UiMessage("Passkey je registrovan.")
             } catch (t: Throwable) {
                 _message.value = UiMessage(t.friendlyMessage(), isError = true)
             } finally {

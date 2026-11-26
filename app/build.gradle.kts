@@ -45,8 +45,8 @@ android {
         applicationId = "dev.signiffia"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -135,6 +135,12 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Passkey / WebAuthn client (Apache-2.0). Requires a credential provider (Google Play
+    // Services) at runtime and Android 14+ for the full passkey UX; password login remains
+    // the always-available fallback.
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
 
     // Official Android APK signing library (Apache-2.0)
     implementation("com.android.tools.build:apksig:8.11.0")

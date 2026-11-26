@@ -111,6 +111,14 @@ fun AccountScreen(vm: AppViewModel) {
                         modifier = Modifier.weight(1f),
                     ) { Text("Prijavi se") }
                 }
+                if (vm.passkeySupported) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { vm.passkeyLogin(username, serverUrl, deviceName) },
+                        enabled = username.isNotBlank() && serverUrl.startsWith("https://"),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Prijavi se passkey-jem") }
+                }
             } else {
                 StatusBadge("Prijavljen", BadgeTone.Success)
                 Spacer(Modifier.height(8.dp))
@@ -120,6 +128,12 @@ fun AccountScreen(vm: AppViewModel) {
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(onClick = { vm.logoutAccount() }, modifier = Modifier.fillMaxWidth()) {
                     Text("Odjavi se")
+                }
+                if (vm.passkeySupported) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { vm.registerPasskey() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Registruj passkey na ovom uređaju")
+                    }
                 }
             }
         }

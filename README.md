@@ -86,8 +86,13 @@ kriptografije i nema cloud servisa.
 - **Nezavisan ključ za oporavak** (BIP39, 24 reči) — jedini način oporavka kad su svi uređaji
   izgubljeni.
 - **Upravljanje uređajima** — lista i povlačenje (revoke) izgubljenog telefona.
+- **Passkey (WebAuthn) prijava** (opciono, Android 14+) sa **lozinkom kao fallback-om** —
+  passkey je samo autentifikacija i nikada ne dešifruje trezor.
 - Potpuno **offline po podrazumevanoj postavci**: sinhronizacija radi tek kada korisnik
   eksplicitno podesi server i omogući je. Potpisivanje ostaje uvek lokalno.
+
+Produkcijski sync server (PostgreSQL, migracije, rate limiting, backup/restore) je u
+[`server/`](server/) sa kompletnim uputstvom za deployment.
 
 ### Ograničenja
 

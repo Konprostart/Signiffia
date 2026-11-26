@@ -1,0 +1,43 @@
+# Signiffia sync server + PostgreSQL. Run from this directory:
+#
+#   cp .env.example .env       # set SIGNIFFIA_DB_PASSWORD etc.
+#   docker compose up -d --build
+#
+# The server itself terminates only HTTP; put a TLS reverse proxy (Caddy/nginx) in front of
+# it. See README.md for the full production, HTTPS and backup/restore guide.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: signiffia
+      POSTGRES_USER: signiffia
+      POSTGRES_PASSWORD: ${SIGNIFFIA_DB_PASSWORD:-change-me}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U signiffia -d signiffia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      SIGNIFFIA_STORE: postgres
+      SIGNIFFIA_DB_URL: jdbc:postgresql://db:5432/signiffia
+      SIGNIFFIA_DB_USER: signiffia
+      SIGNIFFIA_DB_PASSWORD: ${SIGNIFFIA_DB_PASSWORD:-change-me}
+    ports:
+      - "127.0.0.1:8080:8080"   # bind to loopback only; expose via the reverse proxy
+    expose:
+      - "8080"
+
+volumes:
+  db_data:

@@ -3,6 +3,40 @@
 Sve značajne promene u ovom projektu. Format prati [Keep a Changelog](https://keepachangelog.com/),
 projekt se pridržava [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — neobjavljeno
+
+### Dodato
+
+- **Produkcijski sync server** (`server/`) sa **PostgreSQL** trajnim skladištenjem (JDBC +
+  HikariCP), **verzionisanim SQL migracijama** (bez gubitka podataka pri nadogradnji) i
+  `docker-compose.yml` za server + bazu.
+- **Passkey / WebAuthn** prijava (backend relying party preko webauthn4j, Apache-2.0) sa
+  **lozinkom kao uvek dostupnim fallback-om**. Android klijent koristi `androidx.credentials`
+  (Android 14+); passkey je samo autentifikacija i **nikada ne dešifruje trezor** niti zamenjuje
+  ključ za oporavak.
+- `GET /vault/meta` endpoint i klijentska sinhronizacija epoche: klijent uvek čita
+  server-autoritativnu verziju/epohu pre upload-a.
+
+### Bezbednost (ispravljeno)
+
+- **Session tokeni se čuvaju kao SHA-256 hash** na serveru — curenje baze ne otkriva korisne
+  bearer tokene.
+- **Rate limiting** na `/auth/login` i `/auth/register` (ključ po IP / `X-Forwarded-For`).
+- **Stroga monotonost epoche i verzije trezora** na serveru: upload sa zastarelom epohom ili
+  verzijom se odbija (ranije je server tiho podizao epochu, što bi pokvarilo AES-GCM AAD
+  vezivanje i dešifrovanje).
+- WebAuthn izazovi su jednokratni i kratkoživeći; origin se eksplicitno proverava.
+- Baza čuva **samo šifrovane podatke i metapodatke** — nikada MVK, ključ za oporavak, privatne
+  ključeve ili lozinke keystore-a.
+
+### Zavisnosti
+
+- **Aplikacija:** `androidx.credentials:credentials:1.3.0` i
+  `androidx.credentials:credentials-play-services-auth:1.3.0` (Apache-2.0) za passkey.
+- **Server (zaseban projekat):** `org.postgresql:postgresql:42.7.3` (BSD-2-Clause),
+  `com.zaxxer:HikariCP:5.1.0` (Apache-2.0), `com.webauthn4j:webauthn4j-core:0.31.9.RELEASE`
+  (Apache-2.0). Nijedna GPL/AGPL/SSPL licenca.
+
 ## [1.3.0] — neobjavljeno
 
 ### Dodato

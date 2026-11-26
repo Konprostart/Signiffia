@@ -1,4 +1,4 @@
-# Izveštaj o testiranju — Signiffia 1.3.0
+# Izveštaj o testiranju — Signiffia 1.3.1
 
 ## Okruženje
 
@@ -26,10 +26,16 @@ potpisuju APK i AAB, proveravaju potpise apksig-om, prave i otvaraju šifrovane 
 
 ## Rezultat
 
-**117 testova, 0 padova, 1 preskočen.** Preskočen je isključivo integracioni test koji
-zahteva stvarni, Gradle-om napravljen APK (`SIGNIFFIA_REAL_APK`); kada se ta promenljiva
-postavi, test se zaista izvršava i proverava potpis. Nijedan test koji ništa ne proverava
-ne izgleda kao „uspešan“.
+**118 testova aplikacije, 0 padova, 1 preskočen** + **26 server testova, 0 padova.**
+Preskočen je isključivo integracioni test koji zahteva stvarni, Gradle-om napravljen APK
+(`SIGNIFFIA_REAL_APK`); kada se ta promenljiva postavi, test se zaista izvršava i proverava
+potpis. Nijedan test koji ništa ne proverava ne izgleda kao „uspešan“.
+
+Server (`server/`) se testira zasebno:
+
+```bash
+cd server && gradle test   # 26 testova: auth, vault, epoch/revoke, enrollment, rate limit, WebAuthn
+```
 
 | Test klasa | Šta pokriva |
 |---|---|
@@ -97,8 +103,10 @@ ne izgleda kao „uspešan“.
   trezora/oporavka/uparivanja je automatski testirana na JVM-u, ali stvarni tok
   „prvi telefon → server → drugi telefon" zahteva deployovan sync server i dva fizička
   uređaja. Referentni server je u `server/` i **nije** deo ovog testnog okruženja.
-- **Passkey (WebAuthn).** Nije uključen u 1.3.0 (zahteva `androidx.credentials` + Play
-  Services + WebAuthn relying party); radi **lozinka naloga** kao fallback.
+- **Passkey (WebAuthn) end-to-end.** Backend relying party (webauthn4j) je implementiran i
+  njegova logika (izazovi, odbijanje malformiranog odgovora) je jedinično testirana, ali stvarna
+  ceremonija sa fizičkim autentifikatorom zahteva deployovan HTTPS RP + Android 14+/Play
+  Services + pravi uređaj. Radi **lozinka naloga** kao uvek dostupan fallback.
 - **Biometrijski/PIN ključ uređaja (`AndroidDeviceKey`).** Ključ uređaja koristi
   `setUserAuthenticationRequired(true)`, što se može potvrditi samo na pravom uređaju.
 

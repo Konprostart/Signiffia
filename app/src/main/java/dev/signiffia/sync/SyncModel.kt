@@ -48,6 +48,12 @@ data class VaultSnapshot(
     }
 }
 
+/** Server-authoritative vault metadata (version + epoch), fetched before an upload. */
+data class VaultMeta(
+    val vaultVersion: Long,
+    val epoch: Long,
+)
+
 /** An authenticated account session. */
 data class SessionInfo(
     val userId: String,
@@ -59,20 +65,18 @@ data class SessionInfo(
 data class EnrollTicket(
     val ticketId: String,
     val expiresAtMillis: Long,
-    val serverPublicKey: ByteArray,
+    /** Fresh nonce bound to this ticket, used in the out-of-band confirmation code. */
     val nonce: ByteArray,
 ) {
     override fun equals(other: Any?): Boolean =
         other is EnrollTicket &&
             ticketId == other.ticketId &&
             expiresAtMillis == other.expiresAtMillis &&
-            serverPublicKey.contentEquals(other.serverPublicKey) &&
             nonce.contentEquals(other.nonce)
 
     override fun hashCode(): Int {
         var result = ticketId.hashCode()
         result = 31 * result + expiresAtMillis.hashCode()
-        result = 31 * result + serverPublicKey.contentHashCode()
         result = 31 * result + nonce.contentHashCode()
         return result
     }

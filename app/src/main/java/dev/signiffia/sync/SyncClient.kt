@@ -42,6 +42,14 @@ class SyncClient(private val transport: SyncTransport) {
 
     // ------------------------------------------------------------- vault
 
+    /** Fetches the server-authoritative vault version + epoch before sealing an upload. */
+    fun fetchVaultMeta(session: SessionInfo): VaultMeta {
+        val response = transport.request("GET", "/vault/meta", ByteArray(0), session.sessionToken)
+        if (response.status != 200) throw error(response)
+        val reader = WireCodec.Reader(response.body)
+        return VaultMeta(vaultVersion = reader.long(), epoch = reader.long())
+    }
+
     fun uploadVault(session: SessionInfo, snapshot: VaultSnapshot) {
         val body = WireCodec.Writer()
             .long(snapshot.vaultVersion)
@@ -113,7 +121,6 @@ class SyncClient(private val transport: SyncTransport) {
         return EnrollTicket(
             ticketId = reader.string(),
             expiresAtMillis = reader.long(),
-            serverPublicKey = reader.bytes(),
             nonce = reader.bytes(),
         )
     }
@@ -123,6 +130,55 @@ class SyncClient(private val transport: SyncTransport) {
         val body = WireCodec.Writer().string(ticketId).bytes(wrappedMvkForDevice).toBytes()
         val response = transport.request("POST", "/enroll/confirm", body, session.sessionToken)
         if (response.status != 200) throw error(response)
+    }
+
+    // ------------------------------------------------------------- webauthn / passkey
+    // These endpoints exchange JSON (WebAuthn ceremony payloads) over the same transport. A
+    // passkey is an authentication credential only — it never decrypts the vault.
+
+    /** Starts passkey registration for the authenticated session; returns options JSON. */
+    fun webauthnRegisterBegin(session: SessionInfo): String {
+        val response = transport.request("POST", "/webauthn/register/begin", ByteArray(0), session.sessionToken)
+        if (response.status != 200) throw error(response)
+        return String(response.body, Charsets.UTF_8)
+    }
+
+    fun webauthnRegisterComplete(session: SessionInfo, responseJson: String) {
+        val body = responseJson.toByteArray(Charsets.UTF_8)
+        val response = transport.request("POST", "/webauthn/register/complete", body, session.sessionToken)
+        if (response.status != 200) throw error(response)
+    }
+
+    /** Starts passkey authentication for a username; returns options JSON, or null when none. */
+    fun webauthnAuthBegin(username: String): String? {
+        val body = username.toByteArray(Charsets.UTF_8)
+        val response = transport.request("POST", "/webauthn/auth/begin", body)
+        if (response.status == 404) return null
+        if (response.status != 200) throw error(response)
+        return String(response.body, Charsets.UTF_8)
+    }
+
+    /** Completes passkey authentication; returns a session on success or null. */
+    fun webauthnAuthComplete(responseJson: String): SessionInfo? {
+        val body = responseJson.toByteArray(Charsets.UTF_8)
+        val response = transport.request("POST", "/webauthn/auth/complete", body)
+        if (response.status != 200) return null
+        val json = String(response.body, Charsets.UTF_8)
+        return SessionInfo(
+            userId = jsonField(json, "userId"),
+            sessionToken = jsonField(json, "sessionToken"),
+            deviceId = jsonField(json, "deviceId"),
+        )
+    }
+
+    private fun jsonField(json: String, field: String): String {
+        val key = "\"$field\":\""
+        val start = json.indexOf(key)
+        if (start < 0) throw SyncException("Neispravan JSON odgovor servera.")
+        val valueStart = start + key.length
+        val valueEnd = json.indexOf('"', valueStart)
+        if (valueEnd < 0) throw SyncException("Neispravan JSON odgovor servera.")
+        return json.substring(valueStart, valueEnd)
     }
 
     private fun error(response: HttpResponse): SyncException {

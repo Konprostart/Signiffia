@@ -184,15 +184,26 @@ class SyncClientTest {
         t.handler = { _, _, _, _ ->
             HttpResponse(
                 200,
-                WireCodec.Writer().string("tid").long(999L)
-                    .bytes(ByteArray(65) { 1 }).bytes(ByteArray(16) { 2 }).toBytes(),
+                WireCodec.Writer().string("tid").long(999L).bytes(ByteArray(16) { 2 }).toBytes(),
             )
         }
         val ticket = SyncClient(t).enrollBegin(session, ByteArray(65) { 0 })
         assertEquals("tid", ticket.ticketId)
         assertEquals(999L, ticket.expiresAtMillis)
-        assertArrayEquals(ByteArray(65) { 1 }, ticket.serverPublicKey)
         assertArrayEquals(ByteArray(16) { 2 }, ticket.nonce)
+    }
+
+    @Test
+    fun `fetchVaultMeta parses version and epoch`() {
+        val t = FakeTransport()
+        t.handler = { _, path, _, auth ->
+            assertEquals("/vault/meta", path)
+            assertEquals("tok-1", auth)
+            HttpResponse(200, WireCodec.Writer().long(4).long(3).toBytes())
+        }
+        val meta = SyncClient(t).fetchVaultMeta(session)
+        assertEquals(4L, meta.vaultVersion)
+        assertEquals(3L, meta.epoch)
     }
 
     @Test
